@@ -27,8 +27,3 @@ jobs:
       - name: Evaluate EV
         run: python app/evaluate_ev.py
 
-      - name: Upload EV Top20 Raw
-        uses: actions/upload-artifact@v4
-        with:
-          name: ev-top20-test-raw
-          path: data/ev_top20_test_raw.csv
