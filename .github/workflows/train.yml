@@ -23,17 +23,6 @@ jobs:
           pip install --upgrade pip
           pip install pandas numpy scikit-learn yfinance joblib
 
-      # ===============================
-      # 1️⃣ 데이터 생성
-      # ===============================
-      - name: Generate raw data
-        run: python app/data_generator.py
-
-      # ===============================
-      # 2️⃣ 모델 학습
-      # ===============================
-      - name: Train model
-        run: python app/model_train.py
 
       # ===============================
       # 3️⃣ EV 계산
@@ -49,6 +38,4 @@ jobs:
         with:
           name: trained-model
           path: |
-            model.pkl
-            scaler.pkl
             data/ev_results.csv
