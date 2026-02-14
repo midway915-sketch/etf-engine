@@ -23,27 +23,26 @@ jobs:
           pip install --upgrade pip
           pip install pandas numpy scikit-learn yfinance joblib
 
-
       # ===============================
-      # 2️⃣ 모델 학습
+      # 1️⃣ 모델 학습
       # ===============================
       - name: Train model
         run: python app/model_train.py
 
       # ===============================
-      # 3️⃣ EV 계산
+      # 2️⃣ EV 계산
       # ===============================
       - name: Evaluate EV
         run: python app/evaluate_ev.py
 
       # ===============================
-      # 4️⃣ Artifact 업로드
+      # 3️⃣ Artifact 업로드 (🔥 app 기준 반영)
       # ===============================
       - name: Upload model artifacts
         uses: actions/upload-artifact@v4
         with:
           name: trained-model
           path: |
-            model.pkl
-            scaler.pkl
+            app/model.pkl
+            app/scaler.pkl
             data/ev_results.csv
