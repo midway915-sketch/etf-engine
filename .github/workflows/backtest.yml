@@ -1,10 +1,10 @@
-name: Download Backtest Data
+name: Run Backtest
 
 on:
   workflow_dispatch:
 
 jobs:
-  download:
+  backtest:
     runs-on: ubuntu-latest
 
     steps:
@@ -18,16 +18,13 @@ jobs:
 
       - name: Install dependencies
         run: |
-          pip install yfinance pandas numpy
+          pip install pandas numpy
 
-      - name: Create data folder
-        run: mkdir -p data
+      - name: Run Backtest
+        run: python app/run_backtest.py
 
-      - name: Run download script
-        run: python app/download_backtest_data.py
-
-      - name: Upload artifact
+      - name: Upload result
         uses: actions/upload-artifact@v4
         with:
-          name: backtest-panel-data
-          path: data/backtest_panel.csv
+          name: backtest-result
+          path: data/backtest_result_summary.csv
