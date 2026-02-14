@@ -67,6 +67,4 @@ print("\n🔥 성공 vs 실패 비교 리포트\n")
 print(report)
 
 report.to_csv("data/success_fail_comparison.csv", index=False)
-
-comparison_df.to_csv("success_fail_comparison.csv", index=False)
 print("✅ success_fail_comparison.csv 저장 완료")
