@@ -117,6 +117,18 @@ def run_backtest(threshold, mode="A"):
         "MaxHoldingDays": max(holding_days) if holding_days else 0
     }
 
+results = []
+
+for th in THRESHOLDS:
+    results.append(run_backtest(th, "A"))
+    results.append(run_backtest(th, "B"))
+
+result_df = pd.DataFrame(results)
+print(result_df)
+
+result_df.to_csv("data/backtest_results.csv", index=False)
+
+
 
 for th in THRESHOLDS:
     print(run_backtest(th, "A"))
