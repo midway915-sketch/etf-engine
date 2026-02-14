@@ -23,3 +23,6 @@ jobs:
 
       - name: Run Live EV Scan
         run: python app/live_ev_scan.py
+
+      - name: Evaluate EV
+        run: python app/evaluate_ev.py
