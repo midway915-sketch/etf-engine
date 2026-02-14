@@ -1,10 +1,10 @@
-name: Build Success Dataset
+name: Train Model
 
 on:
   workflow_dispatch:
 
 jobs:
-  build:
+  train:
     runs-on: ubuntu-latest
 
     steps:
@@ -15,12 +15,17 @@ jobs:
           python-version: '3.10'
 
       - run: |
-          pip install pandas numpy
+          pip install pandas numpy scikit-learn joblib
 
       - run: |
-          PYTHONPATH=. python app/build_success_dataset.py
+          mkdir -p model
+
+      - run: |
+          PYTHONPATH=. python app/train_model.py
 
       - uses: actions/upload-artifact@v4
         with:
-          name: success_dataset
-          path: data/success_dataset.csv
+          name: trained_model
+          path: |
+            model/model.pkl
+            data/scored_dataset.csv
