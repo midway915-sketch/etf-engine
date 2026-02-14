@@ -25,4 +25,4 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: parametric-results
-          path: data/parametric_results.csv
+          path: data/parametric_results_v2.csv
