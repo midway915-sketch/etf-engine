@@ -3,7 +3,6 @@ import numpy as np
 
 INPUT_PATH = "data/backtest_panel.csv"
 OUTPUT_PATH = "data/parametric_results_v2.csv"
-
 INITIAL_SEED = 40_000_000
 
 df = pd.read_csv(INPUT_PATH, parse_dates=["Date"])
@@ -19,48 +18,50 @@ results = []
 # 백테스트 함수
 # scenario = 1  → 보유일 도달 시 무조건 정리
 # scenario = 2  → 보유일 이후에도 stop 도달까지 계속 매수
+# 🔥 복리 구조 적용 (daily_amount = seed / max_days)
 # ==========================================================
-def run_backtest(ev_cut, max_days, stop_level, scenario):
 
-    print("Start:", df["Date"].min())
-    print("End:", df["Date"].max())
+def run_backtest(ev_cut, max_days, stop_level, scenario):
 
     seed = INITIAL_SEED
     in_position = False
     idle_days = 0
-
     total_trades = 0
     win_trades = 0
 
     total_shares = 0
     total_invested = 0
     holding_day = 0
-    extending = False  # Scenario2 연장 상태 여부
+    extending = False
 
     equity_curve = []
     max_equity = seed
     max_dd = 0
 
-    daily_amount = INITIAL_SEED / max_days
     grouped = df.groupby("Date")
 
     for date, day_data in grouped:
+
+        # 🔥 복리 적용: 매일 현재 seed 기준으로 계산
+        daily_amount = seed / max_days   # 🔥 수정
 
         # ===============================
         # 신규 진입
         # ===============================
         if not in_position:
             candidates = day_data[day_data["EV"] >= ev_cut]
-
             if len(candidates) > 0:
                 pick = candidates.sort_values("Max_Drawdown", ascending=False).iloc[0]
-
                 price = pick["Close"]
+
                 invest = daily_amount
                 shares = invest / price
 
                 total_shares = shares
                 total_invested = invest
+
+                seed -= invest  # 🔥 수정 (투자금 차감)
+
                 holding_day = 1
                 extending = False
                 in_position = True
@@ -80,77 +81,90 @@ def run_backtest(ev_cut, max_days, stop_level, scenario):
             avg_price = total_invested / total_shares
 
             # -----------------------------
-            # 1️⃣ +10% 익절 (intraday)
+            # 1️⃣ +10% 익절
             # -----------------------------
             if row["High"] >= avg_price * 1.10:
                 sell_price = avg_price * 1.10
-                profit = total_shares * sell_price - total_invested
+                proceeds = total_shares * sell_price
 
-                seed += profit
+                profit = proceeds - total_invested
+                seed += proceeds   # 🔥 수정 (원금+수익 모두 복귀)
+
                 total_trades += 1
                 if profit > 0:
                     win_trades += 1
 
                 in_position = False
+                total_shares = 0
+                total_invested = 0
                 continue
 
             # -----------------------------
             # 2️⃣ 보유일 도달
             # -----------------------------
             if holding_day >= max_days and not extending:
-
                 if scenario == 1:
-                    # 🔹 Scenario 1: 그냥 정리
                     sell_price = row["Close"]
-                    profit = total_shares * sell_price - total_invested
+                    proceeds = total_shares * sell_price
 
-                    seed += profit
+                    profit = proceeds - total_invested
+                    seed += proceeds   # 🔥 수정
+
                     total_trades += 1
                     if profit > 0:
                         win_trades += 1
 
                     in_position = False
+                    total_shares = 0
+                    total_invested = 0
                     continue
 
                 elif scenario == 2:
-                    # 🔹 Scenario 2: 연장 시작
                     extending = True
 
             # -----------------------------
             # 3️⃣ Scenario 2 연장 구간
             # -----------------------------
             if extending:
-
-                # -stop_level 도달 시 청산
                 if row["Low"] <= avg_price * (1 + stop_level):
                     sell_price = avg_price * (1 + stop_level)
-                    profit = total_shares * sell_price - total_invested
+                    proceeds = total_shares * sell_price
 
-                    seed += profit
+                    profit = proceeds - total_invested
+                    seed += proceeds   # 🔥 수정
+
                     total_trades += 1
                     if profit > 0:
                         win_trades += 1
 
                     in_position = False
+                    total_shares = 0
+                    total_invested = 0
                     continue
 
             # -----------------------------
-            # 4️⃣ 추가 매수 (종가 기준)
+            # 4️⃣ 추가 매수
             # -----------------------------
             close_price = row["Close"]
 
             if close_price <= avg_price * 1.05:
+
                 if close_price >= avg_price:
                     invest = daily_amount * 0.5
                 else:
                     invest = daily_amount
 
-                shares = invest / close_price
-                total_shares += shares
-                total_invested += invest
+                # 🔥 시드 초과 방지
+                invest = min(invest, seed)   # 🔥 수정
+
+                if invest > 0:
+                    shares = invest / close_price
+                    total_shares += shares
+                    total_invested += invest
+                    seed -= invest   # 🔥 수정
 
         # ===============================
-        # MDD 계산
+        # MDD 계산 (현금 기준)
         # ===============================
         equity_curve.append(seed)
 
@@ -170,6 +184,7 @@ def run_backtest(ev_cut, max_days, stop_level, scenario):
 # ==========================================================
 # 파라미터 루프
 # ==========================================================
+
 for scenario in [1, 2]:
     for q in ev_quantiles:
         ev_cut = df["EV"].quantile(q)
@@ -199,5 +214,5 @@ results_df = results_df.sort_values("Seed_Multiple", ascending=False)
 
 results_df.to_csv(OUTPUT_PATH, index=False)
 
-print("✅ Parametric backtest v2 complete")
+print("✅ Parametric backtest v2 complete (Compounding Applied)")
 print(results_df.head(10))
