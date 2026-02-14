@@ -23,8 +23,6 @@ OUTPUT_PATH = "data/backtest_panel.csv"
 # ===============================
 model = joblib.load("app/model.pkl")
 scaler = joblib.load("app/scaler.pkl")
-print("Scaler feature names:")
-print(scaler.feature_names_in_)
 # ===============================
 # SPY (시장 기준)
 # ===============================
@@ -101,17 +99,16 @@ for ticker in TICKERS:
 
     # ===== 모델 입력 feature =====
     feature_cols = [
-        "Max_Drawdown",
-        "Drawdown_60",
         "Drawdown_252",
-        "Z_score",
+        "Drawdown_60",
         "ATR_ratio",
+        "Z_score",
         "MACD_hist",
         "MA20_slope",
         "Market_Drawdown",
         "Market_ATR_ratio",
-        "Market_above_MA200",
     ]
+
 
     df = df.dropna()
 
