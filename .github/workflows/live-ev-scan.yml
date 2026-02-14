@@ -20,9 +20,16 @@ jobs:
         run: |
           pip install --upgrade pip
           pip install pandas numpy scikit-learn joblib yfinance
+          pip install pandas numpy scikit-learn joblib
 
       - name: Run Live EV Scan
         run: python app/live_ev_scan.py
 
       - name: Evaluate EV
         run: python app/evaluate_ev.py
+
+      - name: Upload EV Top20 Raw
+        uses: actions/upload-artifact@v3
+        with:
+          name: ev-top20-test-raw
+          path: data/ev_top20_test_raw.csv
