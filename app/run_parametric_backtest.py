@@ -4,6 +4,9 @@ import numpy as np
 INPUT_PATH = "data/backtest_panel.csv"
 OUTPUT_PATH = "data/parametric_results_v2.csv"
 
+print("Start:", df["Date"].min())
+print("End:", df["Date"].max())
+
 INITIAL_SEED = 40_000_000
 
 df = pd.read_csv(INPUT_PATH, parse_dates=["Date"])
