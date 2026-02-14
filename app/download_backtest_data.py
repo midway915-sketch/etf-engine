@@ -12,8 +12,7 @@ TICKERS = [
     "TNA","TQQQ","PILL","DFEN","RETL","TPOR","UTSL",
     "FAS","WANT","DRN","MIDU","DUSL","UDOW","CURE"
 ]
-print("Scaler feature names:")
-print(scaler.feature_names_in_)
+
 START_DATE = "2015-01-01"
 END_DATE = datetime.today().strftime("%Y-%m-%d")
 
@@ -24,7 +23,8 @@ OUTPUT_PATH = "data/backtest_panel.csv"
 # ===============================
 model = joblib.load("app/model.pkl")
 scaler = joblib.load("app/scaler.pkl")
-
+print("Scaler feature names:")
+print(scaler.feature_names_in_)
 # ===============================
 # SPY (시장 기준)
 # ===============================
