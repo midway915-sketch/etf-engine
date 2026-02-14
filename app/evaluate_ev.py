@@ -71,6 +71,13 @@ print("확률 평균:", round(df["Pred_Prob"].mean(), 4))
 print("확률 최소:", round(df["Pred_Prob"].min(), 4))
 print("확률 최대:", round(df["Pred_Prob"].max(), 4))
 
+print("Success 비율:", df["Success"].mean())
+print("Fail2 중 Success 비율:",
+      df[df["Success"] == 0]["Return_Fail2"].mean())
+
+print(df[["Success","Return_Fail2"]].groupby("Success").mean())
+
+
 print("=" * 60)
 
 # ===============================
