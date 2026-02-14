@@ -27,9 +27,7 @@ jobs:
           pip install pandas numpy scikit-learn joblib
 
       - name: Run training script
-        run: |
-          cd app
-          python model_train.py
+        run: python app/model_train.py
 
       - name: Upload model artifacts
         uses: actions/upload-artifact@v4
