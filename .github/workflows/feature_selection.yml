@@ -29,5 +29,5 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: success-fail-comparison
-          path: success_fail_comparison.csv
+          path: data/success_fail_comparison.csv
       
