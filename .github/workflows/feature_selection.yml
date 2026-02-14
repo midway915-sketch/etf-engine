@@ -1,61 +1,39 @@
-import pandas as pd
-from sklearn.ensemble import RandomForestClassifier
-from sklearn.model_selection import train_test_split
+name: Feature Selection Model
 
-# ===============================
-# 데이터 로드
-# ===============================
-df = pd.read_csv("data/raw_data.csv")
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - "data/raw_data.csv"
+      - "app/**"
+      - ".github/workflows/feature_selection.yml"
 
-# ===============================
-# 타겟 선택
-# 1차 성공 확률 모델
-# ===============================
-y = df["Success_1st"]
+jobs:
+  run-model:
+    runs-on: ubuntu-latest
 
-# 전략 결과 컬럼 제거
-drop_cols = [
-    "Ticker",
-    "Success_1st",
-    "Return_1st",
-    "Hold_days_1st",
-    "Second_phase_used",
-    "Return_final",
-    "Hold_days_final",
-    "Max_hold_days",
-    "Max_drawdown"
-]
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
 
-X = df.drop(columns=drop_cols)
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
 
-# ===============================
-# 모델 학습
-# ===============================
-model = RandomForestClassifier(
-    n_estimators=500,
-    max_depth=8,
-    random_state=42,
-    n_jobs=-1
-)
+      - name: Install dependencies
+        run: |
+          pip install --upgrade pip
+          pip install pandas numpy scikit-learn
 
-model.fit(X, y)
+      - name: Run Feature Selection
+        run: |
+          PYTHONPATH=. python app/feature_selection.py
 
-# ===============================
-# 중요도 추출
-# ===============================
-importances = pd.Series(
-    model.feature_importances_,
-    index=X.columns
-).sort_values(ascending=False)
-
-print("\n🔥 Feature Importance")
-print(importances.head(15))
-
-# ===============================
-# 상위 8~12개 선택
-# ===============================
-top_features = importances.head(12).index.tolist()
-
-print("\n✅ 선택된 핵심 지표:")
-for f in top_features:
-    print(f)
+      - name: Commit results (optional)
+        run: |
+          git config --global user.name "github-actions"
+          git config --global user.email "actions@github.com"
+          git add data/
+          git commit -m "Update feature selection results" || echo "No changes"
+          git push
