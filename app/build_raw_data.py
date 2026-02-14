@@ -30,6 +30,13 @@ for ticker in TICKERS:
 
     df = df.reset_index()
     df["Ticker"] = ticker
+    
+    # Adj Close가 없을 경우 대비
+    if "Adj Close" not in df.columns:
+        df["Adj Close"] = df["Close"]
+
+    df = df[["Date","Ticker","Open","High","Low","Close","Adj Close","Volume"]]
+
     all_data.append(df)
 
 raw = pd.concat(all_data)
