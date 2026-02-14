@@ -21,8 +21,8 @@ jobs:
           pip install --upgrade pip
           pip install pandas numpy scikit-learn joblib yfinance
 
-      - name: Run Live EV Scan
-        run: python app/analyze_top20_correlation.py
+      - name: ----------
+        run: python app/dd_threshold_scan.py
 
       - name: Evaluate EV
         run: python app/evaluate_ev.py
