@@ -12,8 +12,8 @@ from sklearn.model_selection import TimeSeriesSplit
 # 설정
 # ===============================
 DATA_PATH = "data/raw_data.csv"
-MODEL_PATH = "model.pkl"
-SCALER_PATH = "scaler.pkl"
+MODEL_PATH = "app/model.pkl"
+SCALER_PATH = "app/scaler.pkl"
 
 FEATURES = [
     "Drawdown_252",
