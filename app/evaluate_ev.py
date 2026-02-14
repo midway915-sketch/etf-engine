@@ -6,8 +6,9 @@ import joblib
 # 설정
 # ===============================
 DATA_PATH = "data/raw_data.csv"
-MODEL_PATH = "model.pkl"
-SCALER_PATH = "scaler.pkl"
+MODEL_PATH = "app/model.pkl"      # 🔥 수정
+SCALER_PATH = "app/scaler.pkl"    # 🔥 수정
+
 
 FEATURES = [
     "Drawdown_252",
