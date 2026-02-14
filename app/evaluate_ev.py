@@ -64,6 +64,14 @@ df_test = df.iloc[split_idx:].copy()
 df_ev_positive = df_test[df_test["EV"] > 0]
 threshold = df_test["EV"].quantile(0.8)
 df_top20 = df_test[df_test["EV"] >= threshold]
+# ===============================
+# 🔥 상위 20% raw 데이터 저장
+# ===============================
+df_top20_raw = df_top20.copy()
+
+df_top20_raw.to_csv("data/ev_top20_test_raw.csv", index=False)
+
+print("✅ ev_top20_test_raw.csv 저장 완료")
 
 print("=" * 60)
 print("📊 [TEST 구간 결과 - Corrected EV]")
