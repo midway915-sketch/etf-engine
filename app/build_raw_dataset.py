@@ -1,6 +1,8 @@
 import pandas as pd
+import numpy as np
 import yfinance as yf
-from datetime import datetime
+import os   # 👈 이 줄 추가
+
 
 TICKERS = [
     "SOXL","BULZ","TQQQ","TECL","WEBL","UPRO",
