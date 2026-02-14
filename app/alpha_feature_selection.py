@@ -68,4 +68,5 @@ print(report)
 
 report.to_csv("data/success_fail_comparison.csv", index=False)
 
-print("\n✅ 리포트 저장 완료 → data/success_fail_comparison.csv")
+comparison_df.to_csv("success_fail_comparison.csv", index=False)
+print("✅ success_fail_comparison.csv 저장 완료")
