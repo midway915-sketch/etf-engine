@@ -23,18 +23,19 @@ OUTPUT_PATH = "data/backtest_panel.csv"
 print("Downloading SPY (Market Proxy)...")
 spy = yf.download("SPY", start=START_DATE, end=END_DATE, progress=False)
 
+# 🔥 MultiIndex 제거
+if isinstance(spy.columns, pd.MultiIndex):
+    spy.columns = spy.columns.get_level_values(0)
+
 spy = spy.reset_index()
 
-# Market Drawdown (252)
 spy["Market_Rolling_Max"] = spy["Close"].rolling(252).max()
 spy["Market_Drawdown"] = spy["Close"] / spy["Market_Rolling_Max"] - 1
 
-# Market ATR ratio
 high_low = spy["High"] - spy["Low"]
 spy_atr = high_low.rolling(14).mean()
 spy["Market_ATR_ratio"] = spy_atr / spy["Close"]
 
-# Market above MA200
 spy["Market_above_MA200"] = (
     spy["Close"] > spy["Close"].rolling(200).mean()
 ).astype(int)
@@ -54,6 +55,11 @@ all_data = []
 for ticker in TICKERS:
     print(f"Downloading {ticker}...")
     df = yf.download(ticker, start=START_DATE, end=END_DATE, progress=False)
+
+    # 🔥 MultiIndex 제거
+    if isinstance(df.columns, pd.MultiIndex):
+        df.columns = df.columns.get_level_values(0)
+
 
     if df.empty:
         continue
