@@ -37,11 +37,19 @@ X_scaled = scaler.transform(X)
 df["Pred_Prob"] = model.predict_proba(X_scaled)[:, 1]
 
 # ===============================
-# 🔥 EV 계산 (Fail2 기준)
+# 🔥 실패 평균 수익 계산 (성공 0.10 제외)
+# ===============================
+fail_mean = df.loc[
+    df["Return_Fail2"] != 0.10,
+    "Return_Fail2"
+].mean()
+
+# ===============================
+# 🔥 올바른 EV 계산
 # ===============================
 df["EV"] = (
     df["Pred_Prob"] * 0.10
-    + (1 - df["Pred_Prob"]) * df["Return_Fail2"]
+    + (1 - df["Pred_Prob"]) * fail_mean
 )
 
 # ===============================
@@ -58,7 +66,7 @@ threshold = df_test["EV"].quantile(0.8)
 df_top20 = df_test[df_test["EV"] >= threshold]
 
 print("=" * 60)
-print("📊 [TEST 구간 결과]")
+print("📊 [TEST 구간 결과 - Corrected EV]")
 print("전체 평균 EV:", round(df_test["EV"].mean(), 4))
 print("EV > 0 비율:", round(len(df_ev_positive) / len(df_test), 4))
 print("EV > 0 실제 성공률:", round(df_ev_positive["Success"].mean(), 4))
@@ -67,15 +75,15 @@ print("상위 20% 실제 성공률:", round(df_top20["Success"].mean(), 4))
 
 print("-" * 60)
 print("Success 비율:", round(df_test["Success"].mean(), 4))
-print("Fail2 평균 (Success=0):",
-      round(df_test[df_test["Success"] == 0]["Return_Fail2"].mean(), 4))
-print("Fail2 최소:", round(df_test["Return_Fail2"].min(), 4))
+print("Fail 평균 수익:", round(fail_mean, 4))
+print("Fail 최소:", round(
+    df_test.loc[df_test["Return_Fail2"] != 0.10, "Return_Fail2"].min(), 4
+))
 
 print("-" * 60)
 print("확률 평균:", round(df_test["Pred_Prob"].mean(), 4))
 print("확률 최소:", round(df_test["Pred_Prob"].min(), 4))
 print("확률 최대:", round(df_test["Pred_Prob"].max(), 4))
-
 print("=" * 60)
 
 # ===============================
