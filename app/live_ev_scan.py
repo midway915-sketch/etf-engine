@@ -7,14 +7,12 @@ import joblib
 # 설정
 # ===============================
 TICKERS = [
-    "SPY",
-    "QQQ",
-    "IWM",
-    "DIA",
-    "EEM",
-    "TLT",
-    "GLD"
+    "SOXL","BULZ","TQQQ","TECL","WEBL","UPRO",
+    "WANT","HIBL","FNGU","TNA","RETL","UDOW",
+    "NAIL","LABU","PILL","MIDU","CURE","FAS",
+    "TPOR","DRN","DUSL","DFEN","UTSL","BNKU","DPST"
 ]
+
 
 MODEL_PATH = "app/model.pkl"
 SCALER_PATH = "app/scaler.pkl"
