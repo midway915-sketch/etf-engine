@@ -20,6 +20,9 @@ jobs:
         run: |
           pip install pandas numpy
 
+      - name: Create data folder
+        run: mkdir -p data
+
       - name: Run Backtest
         run: python app/run_backtest.py
 
