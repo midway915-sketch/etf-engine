@@ -25,6 +25,12 @@ jobs:
 
 
       # ===============================
+      # 2️⃣ 모델 학습
+      # ===============================
+      - name: Train model
+        run: python app/model_train.py
+
+      # ===============================
       # 3️⃣ EV 계산
       # ===============================
       - name: Evaluate EV
@@ -38,4 +44,6 @@ jobs:
         with:
           name: trained-model
           path: |
+            model.pkl
+            scaler.pkl
             data/ev_results.csv
