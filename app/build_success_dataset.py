@@ -1,5 +1,8 @@
 import pandas as pd
 import numpy as np
+import yfinance as yf
+import os   # 👈 이 줄 추가
+
 
 df = pd.read_csv("data/raw_data.csv")
 df = df.sort_values(["Ticker", "Date"])
