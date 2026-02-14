@@ -1,0 +1,32 @@
+name: Build Raw Dataset
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v3
+
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.10'
+
+    - name: Install packages
+      run: |
+        pip install pandas numpy yfinance
+
+    - name: Build raw data
+      run: |
+        PYTHONPATH=. python app/build_raw_dataset.py
+
+    - name: Commit raw_data.csv
+      run: |
+        git config --global user.name "github-actions"
+        git config --global user.email "actions@github.com"
+        git add data/raw_data.csv
+        git commit -m "Update raw_data.csv"
+        git push
