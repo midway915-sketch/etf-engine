@@ -9,7 +9,7 @@ from datetime import datetime
 TICKERS = [
     "SOXL","BULZ","WEBL","LABU","TECL","HIBL","NAIL","DPST",
     "TNA","TQQQ","PILL","DFEN","RETL","TPOR","UTSL",
-    "FAS","WANT","DRN","MIDU","DUSL","UDOW","CURE","TSLL"
+    "FAS","WANT","DRN","MIDU","DUSL","UDOW","CURE"
 ]
 
 START_DATE = "2015-01-01"
@@ -18,7 +18,36 @@ END_DATE = datetime.today().strftime("%Y-%m-%d")
 OUTPUT_PATH = "data/backtest_panel.csv"
 
 # ===============================
-# 데이터 다운로드
+# 1️⃣ SPY 다운로드 (시장 기준)
+# ===============================
+print("Downloading SPY (Market Proxy)...")
+spy = yf.download("SPY", start=START_DATE, end=END_DATE, progress=False)
+
+spy = spy.reset_index()
+
+# Market Drawdown (252)
+spy["Market_Rolling_Max"] = spy["Close"].rolling(252).max()
+spy["Market_Drawdown"] = spy["Close"] / spy["Market_Rolling_Max"] - 1
+
+# Market ATR ratio
+high_low = spy["High"] - spy["Low"]
+spy_atr = high_low.rolling(14).mean()
+spy["Market_ATR_ratio"] = spy_atr / spy["Close"]
+
+# Market above MA200
+spy["Market_above_MA200"] = (
+    spy["Close"] > spy["Close"].rolling(200).mean()
+).astype(int)
+
+spy_features = spy[[
+    "Date",
+    "Market_Drawdown",
+    "Market_ATR_ratio",
+    "Market_above_MA200"
+]]
+
+# ===============================
+# 2️⃣ 개별 종목 다운로드
 # ===============================
 all_data = []
 
@@ -33,13 +62,12 @@ for ticker in TICKERS:
     df["Ticker"] = ticker
 
     # ---------------------------
-    # Feature 계산 (간단 버전)
+    # Feature 계산
     # ---------------------------
-    df["Return"] = df["Close"].pct_change()
 
     # Drawdown
-    rolling_max = df["Close"].rolling(252).max()
-    df["Drawdown_252"] = df["Close"] / rolling_max - 1
+    rolling_max_252 = df["Close"].rolling(252).max()
+    df["Drawdown_252"] = df["Close"] / rolling_max_252 - 1
 
     rolling_max_60 = df["Close"].rolling(60).max()
     df["Drawdown_60"] = df["Close"] / rolling_max_60 - 1
@@ -67,20 +95,19 @@ for ticker in TICKERS:
     signal = macd.ewm(span=9).mean()
     df["MACD_hist"] = macd - signal
 
-    # Market proxy (SPY)
-    # 간단히 자기 자신 기준으로 대체 (원하면 SPY 따로 붙일 수 있음)
-    df["Market_Drawdown"] = df["Drawdown_252"]
-    df["Market_ATR_ratio"] = df["ATR_ratio"]
-    df["Market_above_MA200"] = (df["Close"] > df["Close"].rolling(200).mean()).astype(int)
+    # ---------------------------
+    # SPY 시장 데이터 병합
+    # ---------------------------
+    df = df.merge(spy_features, on="Date", how="left")
 
     df = df.dropna()
 
     all_data.append(df)
 
 # ===============================
-# 통합 저장
+# 3️⃣ 통합 저장
 # ===============================
 final_df = pd.concat(all_data).sort_values(["Date", "Ticker"])
 final_df.to_csv(OUTPUT_PATH, index=False)
 
-print("✅ backtest_panel.csv 저장 완료")
+print("✅ backtest_panel.csv 저장 완료 (SPY 기준 적용)")
