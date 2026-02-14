@@ -7,7 +7,6 @@ from datetime import datetime
 # ===============================
 # 기본 설정
 # ===============================
-
 TICKERS = [
     "SOXL","BULZ","TQQQ","TECL","WEBL","UPRO",
     "WANT","HIBL","FNGU","TNA","RETL","UDOW",
@@ -16,7 +15,6 @@ TICKERS = [
 ]
 
 MARKET_TICKER = "SPY"
-
 START_DATE = "2015-01-01"
 END = datetime.today().strftime("%Y-%m-%d")
 
@@ -25,7 +23,6 @@ os.makedirs("data", exist_ok=True)
 # ===============================
 # 보조지표 함수
 # ===============================
-
 def rsi(series, period=14):
     delta = series.diff()
     gain = delta.clip(lower=0)
@@ -50,7 +47,6 @@ def atr(df, period=14):
 # ===============================
 # Market 데이터
 # ===============================
-
 market_df = yf.download(MARKET_TICKER, start=START_DATE, end=END)
 market_df.columns = market_df.columns.get_level_values(0)
 market_df = market_df.dropna()
@@ -63,7 +59,6 @@ market_ma200 = market_df["Close"].rolling(200).mean()
 # ===============================
 # ETF 데이터 수집
 # ===============================
-
 rows = []
 
 for ticker in TICKERS:
@@ -72,64 +67,75 @@ for ticker in TICKERS:
     df.columns = df.columns.get_level_values(0)
     df = df.dropna()
 
-    if len(df) < 300:
+    if len(df) < 350:
         continue
 
     close = df["Close"]
 
-    # Mean Reversion
+    # ===== 지표 계산 =====
     drawdown_60 = close / close.rolling(60).max() - 1
     drawdown_252 = close / close.rolling(252).max() - 1
     z_score = zscore(close, 60)
+
     bb_mid = close.rolling(20).mean()
     bb_std = close.rolling(20).std()
     bb_pos = (close - bb_mid) / (2 * bb_std)
     bb_width = (2 * bb_std) / bb_mid
 
-    # Volatility
     atr_ratio = atr(df) / close
     realized_vol = close.pct_change().rolling(20).std()
 
-    # Momentum
     rsi_val = rsi(close)
     rsi_slope = rsi_val.diff(5)
+
     roc5 = close.pct_change(5)
     roc10 = close.pct_change(10)
     roc20 = close.pct_change(20)
+
     ema12 = close.ewm(span=12).mean()
     ema26 = close.ewm(span=26).mean()
     macd_hist = ema12 - ema26
 
-    # Trend
     ma20 = close.rolling(20).mean()
     ma60 = close.rolling(60).mean()
     ma120 = close.rolling(120).mean()
+
     ma20_gap = (close - ma20) / ma20
     ma60_gap = (close - ma60) / ma60
     ma120_gap = (close - ma120) / ma120
     ma20_slope = ma20.diff(5)
 
-    # Volume
     volume_ratio = df["Volume"] / df["Volume"].rolling(20).mean()
     obv = (np.sign(close.diff()) * df["Volume"]).fillna(0).cumsum()
     obv_change = obv.pct_change(5)
 
-    for i in range(252, len(df) - 20):
+    # ===============================
+    # 🔥 40일 분할매수 전략 라벨링
+    # ===============================
+
+    for i in range(252, len(df) - 40):
 
         date = df.index[i]
-
         if date not in market_df.index:
             continue
 
         m_idx = market_df.index.get_loc(date)
 
-        future_ret = close.iloc[i+20] / close.iloc[i] - 1
-        success = 1 if future_ret > 0.15 else 0
+        entry_prices = close.iloc[i:i+40].values
+        avg_price = 0
+        success = 0
+
+        for d in range(40):
+            avg_price = entry_prices[:d+1].mean()
+            current_price = entry_prices[d]
+
+            if current_price >= avg_price * 1.10:
+                success = 1
+                break
 
         rows.append({
             "Ticker": ticker,
             "Success": success,
-            "Return_%": round(future_ret * 100, 2),
 
             # Mean Reversion
             "Drawdown_60": drawdown_60.iloc[i],
@@ -173,4 +179,4 @@ raw_df = pd.DataFrame(rows)
 raw_df = raw_df.dropna()
 raw_df.to_csv("data/raw_data.csv", index=False)
 
-print("✅ raw_data.csv 생성 완료")
+print("✅ 40일 전략 기반 raw_data.csv 생성 완료")
