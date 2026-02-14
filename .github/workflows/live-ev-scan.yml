@@ -22,7 +22,7 @@ jobs:
           pip install pandas numpy scikit-learn joblib yfinance
 
       - name: Run Live EV Scan
-        run: python app/live_ev_scan.py
+        run: python app/analyze_top20_correlation.py
 
       - name: Evaluate EV
         run: python app/evaluate_ev.py
