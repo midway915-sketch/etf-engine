@@ -2,17 +2,10 @@ name: Alpha Feature Selection
 
 on:
   workflow_dispatch:
-  push:
-    paths:
-      - "data/raw_data.csv"
-      - "app/alpha_feature_selection.py"
 
 jobs:
   feature-selection:
     runs-on: ubuntu-latest
-
-    permissions:
-      contents: write   # 🔥 push 권한
 
     steps:
       - name: Checkout repository
@@ -31,11 +24,3 @@ jobs:
       - name: Run feature selection
         run: |
           PYTHONPATH=. python app/alpha_feature_selection.py
-
-      - name: Commit results
-        run: |
-          git config --global user.name "github-actions"
-          git config --global user.email "github-actions@github.com"
-          git add data/top_features.csv
-          git commit -m "Update alpha feature selection results" || echo "No changes"
-          git push
