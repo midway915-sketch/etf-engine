@@ -16,7 +16,14 @@ all_data = []
 
 for ticker in TICKERS:
     print(f"Downloading {ticker}...")
-    df = yf.download(ticker, start=START, end=END, interval="1d", progress=False)
+    df = yf.download(
+        ticker,
+        start=START,
+        end=END,
+        interval="1d",
+        auto_adjust=False,   # 🔥 이거 반드시 추가
+        progress=False
+    )
 
     if df.empty:
         continue
