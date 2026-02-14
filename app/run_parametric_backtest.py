@@ -4,9 +4,6 @@ import numpy as np
 INPUT_PATH = "data/backtest_panel.csv"
 OUTPUT_PATH = "data/parametric_results_v2.csv"
 
-print("Start:", df["Date"].min())
-print("End:", df["Date"].max())
-
 INITIAL_SEED = 40_000_000
 
 df = pd.read_csv(INPUT_PATH, parse_dates=["Date"])
@@ -24,6 +21,9 @@ results = []
 # scenario = 2  → 보유일 이후에도 stop 도달까지 계속 매수
 # ==========================================================
 def run_backtest(ev_cut, max_days, stop_level, scenario):
+
+    print("Start:", df["Date"].min())
+    print("End:", df["Date"].max())
 
     seed = INITIAL_SEED
     in_position = False
