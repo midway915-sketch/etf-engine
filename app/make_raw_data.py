@@ -36,7 +36,7 @@ def atr(df, period=14):
     return tr.rolling(period).mean()
 
 # ===============================
-# 🔥 전략 시뮬레이션 (무제한 추가매수 버전)
+# 🔥 전략 시뮬레이션 (용어 변경 반영)
 # ===============================
 def simulate_strategy(prices):
 
@@ -46,7 +46,7 @@ def simulate_strategy(prices):
     # -------------------------
     # 1차 40일 분할매수
     # -------------------------
-    success_40 = 0
+    success = 0   # 🔥 수정: Success 단일 정의
     exit_day = 39
 
     for d in range(min(40, len(prices))):
@@ -56,81 +56,55 @@ def simulate_strategy(prices):
         mdd = min(mdd, ret)
 
         if ret >= 0.10:
-            success_40 = 1
+            success = 1   # 🔥 수정
             exit_day = d
             break
 
-    # 🔥 수정: 40일 데이터 없으면 무효 처리
     if len(prices) < 40:
         return None
 
     # =========================
-    # 전략 1 (기존 동일)
+    # 🔥 수정: 실패1 (40일차 정리)
     # =========================
-    if success_40 == 1:
-        strat1_return = 0.10
-        strat1_success = 1
-        strat1_holding = exit_day + 1
+    avg_40 = np.mean(prices[:40])
+    ret_40 = prices[39] / avg_40 - 1
+    return_fail1 = ret_40   # 🔥 수정: Return_Fail1
+
+    # =========================
+    # 🔥 수정: 실패2 (확장형)
+    # =========================
+    if success == 1:
+        return_fail2 = 0.10  # 성공 시 동일하게 10%
+        holding = exit_day + 1
     else:
-        avg_40 = np.mean(prices[:40])
-        ret_40 = prices[39] / avg_40 - 1
-        strat1_return = ret_40
-        strat1_success = 0
-        strat1_holding = 40
-
-    # =========================
-    # 전략 2
-    # =========================
-    if success_40 == 1:
-        strat2_return = 0.10
-        strat2_success = 1
-        strat2_holding = exit_day + 1
-
-    else:
-        avg_40 = np.mean(prices[:40])
-        ret_40 = prices[39] / avg_40 - 1
-
-        # 🔵 40일 종료 시 -10% 이내면 그냥 정리
         if ret_40 >= -0.10:
-            strat2_return = ret_40
-            strat2_success = 0
-            strat2_holding = 40
-
-        # 🔴 -10% 초과 손실이면 무제한 추가매수
+            return_fail2 = ret_40
+            holding = 40
         else:
             extended_exit = False
 
-            # 🔥 수정: 80일 제한 제거 → 데이터 끝까지
             for d2 in range(40, len(prices)):
                 invested.append(prices[d2])
                 avg_ext = np.mean(invested)
                 ret_ext = prices[d2] / avg_ext - 1
                 mdd = min(mdd, ret_ext)
 
-                # 🔥 수정: 평균단가 대비 -10% 회복 시 종료
                 if ret_ext >= -0.10:
-                    strat2_return = ret_ext
-                    strat2_success = 0
-                    strat2_holding = d2 + 1
+                    return_fail2 = ret_ext
+                    holding = d2 + 1
                     extended_exit = True
                     break
 
-            # 🔥 수정: 데이터 끝까지 도달한 경우
             if not extended_exit:
                 avg_ext = np.mean(invested)
-                final_ret = prices[-1] / avg_ext - 1
-                strat2_return = final_ret
-                strat2_success = 0
-                strat2_holding = len(prices)
+                return_fail2 = prices[-1] / avg_ext - 1
+                holding = len(prices)
 
     return {
-        "Strategy1_Return": strat1_return,
-        "Strategy1_Success": strat1_success,
-        "Strategy1_Holding": strat1_holding,
-        "Strategy2_Return": strat2_return,
-        "Strategy2_Success": strat2_success,
-        "Strategy2_Holding": strat2_holding,
-        "Max_Holding": max(strat1_holding, strat2_holding),
+        "Success": success,                 # 🔥 수정
+        "Return_Fail1": return_fail1,       # 🔥 수정
+        "Return_Fail2": return_fail2,       # 🔥 수정
+        "Holding_Period": holding,
         "Max_Drawdown": mdd
     }
 
@@ -173,14 +147,13 @@ for ticker in TICKERS:
     ma20 = close.rolling(20).mean()
     ma20_slope = ma20.diff(5)
 
-    # 🔥 수정: 80일 제한 제거 → 미래 전체 사용
     for i in range(252, len(df) - 1):
 
         date = df.index[i]
         if date not in market_df.index:
             continue
 
-        prices = close.iloc[i:].values  # 🔥 수정: 끝까지 전달
+        prices = close.iloc[i:].values
         sim = simulate_strategy(prices)
 
         if sim is None:
@@ -213,4 +186,4 @@ raw_df = raw_df.sort_values("Date")
 
 raw_df.to_csv("data/raw_data.csv", index=False)
 
-print("✅ raw_data.csv 생성 완료 (전략2 무제한 추가매수 반영)")
+print("✅ raw_data.csv 생성 완료 (Success / Fail1 / Fail2 구조 적용)")
