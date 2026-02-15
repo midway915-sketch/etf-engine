@@ -183,7 +183,7 @@ for q in ev_quantiles:
 
 
                 tr, multiple, mdd, idle, sr, cycle_count, real_max_hold = run_backtest(
-                    ev_cut, max_days, stop_level, scenario, profit_target  # 🔥 수정
+                    profit_target, ev_cut, max_days, stop_level, scenario
                 )
 
                 results.append({
