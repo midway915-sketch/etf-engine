@@ -172,7 +172,12 @@ def run_backtest(ev_cut, max_days, stop_level, scenario):
         # 🔥 MDD 계산 (총자산 기준으로 변경)
         # ===============================
         if in_position:
-            current_value = total_shares * row["Close"]
+            row_current = day_data[day_data["Ticker"] == pick["Ticker"]]  # 🔥 row 안전 확보
+            if not row_current.empty:
+                current_price = row_current.iloc[0]["Close"]
+                current_value = total_shares * current_price
+            else:
+                current_value = 0
         else:
             current_value = 0
 
