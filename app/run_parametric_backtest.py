@@ -108,7 +108,7 @@ for date, day_data in grouped:
             if holding_day[i] >= max_days and not extending[i]:
 
                 # 🔥🔥🔥 추가: max_days 초과 카운트
-                if holding_day[i] > max_days:
+                if actual_max_holding_days[i] > max_days:
                     exceeded_max_days_count[i] += 1   # 🔥 추가
 
                 current_return = (row["Close"] - avg_price) / avg_price
