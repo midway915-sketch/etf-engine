@@ -45,6 +45,11 @@ cycle_unit = np.zeros(P)
 cycle_start_seed = np.zeros(P)
 cycle_max_loss = np.zeros(P)
 
+# 🔥🔥🔥 추가: max_days 초과 카운트 & 총 홀딩일 합계
+exceeded_max_days_count = np.zeros(P)      # 🔥 추가
+exceeded_flag = np.zeros(P, dtype=bool)   # 🔥 추가
+total_holding_days_sum = np.zeros(P)      # 🔥 추가
+
 grouped = df.groupby("Date", sort=False)
 
 for date, day_data in grouped:
@@ -58,6 +63,7 @@ for date, day_data in grouped:
         # =========================
         if not in_position[i]:
             candidates = day_data[day_data["EV"] >= ev_cut]
+
             if len(candidates) > 0 and not daily_buy_done[i]:
                 pick = candidates.sort_values("EV", ascending=False).iloc[0]
                 ticker = pick.name
@@ -75,6 +81,8 @@ for date, day_data in grouped:
 
                 holding_day[i] = 1
                 extending[i] = False
+                exceeded_flag[i] = False   # 🔥 추가 (새 사이클 초기화)
+
                 in_position[i] = True
                 picked_ticker[i] = ticker
                 daily_buy_done[i] = True
@@ -89,18 +97,25 @@ for date, day_data in grouped:
                 continue
 
             row = day_data.loc[picked_ticker[i]]
+
             holding_day[i] += 1
 
             actual_max_holding_days[i] = max(
                 actual_max_holding_days[i], holding_day[i]
             )
 
+            # 🔥🔥🔥 max_days 초과 카운트 (사이클당 1회)
+            if holding_day[i] > max_days and not exceeded_flag[i]:
+                exceeded_max_days_count[i] += 1
+                exceeded_flag[i] = True
+
             avg_price = total_invested[i] / total_shares[i]
 
             # =====================================================
-            # 🔥 max_days 도달 시 분기
+            # max_days 도달 시 분기
             # =====================================================
             if holding_day[i] >= max_days and not extending[i]:
+
                 current_return = (row["Close"] - avg_price) / avg_price
 
                 if current_return >= stop_level:
@@ -112,8 +127,11 @@ for date, day_data in grouped:
 
                     seed[i] += proceeds
                     total_trades[i] += 1
+
                     if cycle_return > 0:
                         win_trades[i] += 1
+
+                    total_holding_days_sum[i] += holding_day[i]   # 🔥 추가
 
                     in_position[i] = False
                     total_shares[i] = 0
@@ -128,17 +146,22 @@ for date, day_data in grouped:
                     extending[i] = True
 
             # =====================================================
-            # 🔥🔥🔥 물타기 모드 (profit_target 체크 안함)
+            # 물타기 모드
             # =====================================================
             if extending[i]:
-                # 🔥 stop_level 도달 시 청산
+
                 if row["High"] >= avg_price * (1 + stop_level):
                     sell_price = avg_price * (1 + stop_level)
                     proceeds = total_shares[i] * sell_price
                     cycle_return = (proceeds - total_invested[i]) / total_invested[i]
+
                     cycle_max_loss[i] = min(cycle_max_loss[i], cycle_return)
+
                     seed[i] += proceeds
                     total_trades[i] += 1
+
+                    total_holding_days_sum[i] += holding_day[i]   # 🔥 추가
+
                     in_position[i] = False
                     total_shares[i] = 0
                     total_invested[i] = 0
@@ -148,20 +171,18 @@ for date, day_data in grouped:
                     cycle_start_seed[i] = 0
                     picked_ticker[i] = None
                     continue
-            
-                # 🔥🔥🔥 수정: 물타기 모드에서는 조건 없이 매일 종가 full 매수
-                if not daily_buy_done[i]:  # 🔥 수정
+
+                if not daily_buy_done[i]:
                     close_price = row["Close"]
-                    invest = cycle_unit[i]  # 🔥 수정 (항상 full unit)
+                    invest = cycle_unit[i]
                     shares = invest / close_price
                     total_shares[i] += shares
                     total_invested[i] += invest
                     seed[i] -= invest
                     daily_buy_done[i] = True
-            
 
             # =====================================================
-            # 🔥 일반 구간 (DCA 조건부 매수로 수정된 부분)
+            # 일반 구간
             # =====================================================
             if not extending[i]:
 
@@ -176,6 +197,8 @@ for date, day_data in grouped:
                     total_trades[i] += 1
                     win_trades[i] += 1
 
+                    total_holding_days_sum[i] += holding_day[i]   # 🔥 추가
+
                     in_position[i] = False
                     total_shares[i] = 0
                     total_invested[i] = 0
@@ -186,19 +209,15 @@ for date, day_data in grouped:
                     picked_ticker[i] = None
                     continue
 
-                # 🔥🔥🔥 수정된 추가매수 로직
                 close_price = row["Close"]
 
                 if not daily_buy_done[i]:
-
                     if close_price <= avg_price:
-                        invest = cycle_unit[i]  # 🔥 평단 이하 → 전액 매수
-
+                        invest = cycle_unit[i]
                     elif close_price <= avg_price * 1.05:
-                        invest = cycle_unit[i] / 2  # 🔥 평단 초과~5% → 반만 매수
-
+                        invest = cycle_unit[i] / 2
                     else:
-                        invest = 0  # 🔥 그 이상은 매수 안함
+                        invest = 0
 
                     if invest > 0:
                         shares = invest / close_price
@@ -226,8 +245,9 @@ for date, day_data in grouped:
         if dd < max_dd[i]:
             max_dd[i] = dd
 
+
 # ============================================================
-# 결과 생성 (기존 그대로)
+# 결과 생성
 # ============================================================
 
 results = []
@@ -237,7 +257,6 @@ for i, (q, ev_cut, profit_target, max_days, stop_level) in enumerate(param_grid)
     if in_position[i]:
         last_date = df["Date"].max()
         last_day = df[df["Date"] == last_date].set_index("Ticker")
-
         if picked_ticker[i] in last_day.index:
             current_value = total_shares[i] * last_day.loc[picked_ticker[i]]["Close"]
         else:
@@ -251,6 +270,11 @@ for i, (q, ev_cut, profit_target, max_days, stop_level) in enumerate(param_grid)
         win_trades[i] / total_trades[i] if total_trades[i] > 0 else 0
     )
 
+    avg_holding = (
+        total_holding_days_sum[i] / total_trades[i]
+        if total_trades[i] > 0 else 0
+    )  # 🔥 추가
+
     results.append({
         "Scenario": scenario,
         "EV_quantile": q,
@@ -258,6 +282,8 @@ for i, (q, ev_cut, profit_target, max_days, stop_level) in enumerate(param_grid)
         "Profit_Target": profit_target,
         "Max_Holding_Days": max_days,
         "Actual_Max_Holding_Days": actual_max_holding_days[i],
+        "Exceeded_Max_Days_Count": exceeded_max_days_count[i],  # 🔥 추가
+        "Avg_Holding_Days": avg_holding,                        # 🔥 추가
         "Stop_Level": stop_level,
         "Total_Return": (final_equity / INITIAL_SEED) - 1,
         "Seed_Multiple": final_equity / INITIAL_SEED,
@@ -272,5 +298,5 @@ results_df = pd.DataFrame(results)
 results_df = results_df.sort_values("Seed_Multiple", ascending=False)
 results_df.to_csv(OUTPUT_PATH, index=False)
 
-print("✅ Numpy Engine Complete (Conditional DCA Applied)")
+print("✅ Numpy Engine Complete (Exceeded Count + Avg Holding Added)")
 print(results_df.head(10))
