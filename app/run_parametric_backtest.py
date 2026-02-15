@@ -12,11 +12,10 @@ profit_targets = [0.09, 0.12, 0.15]
 ev_quantiles = [0.65, 0.71, 0.78]
 holding_days_list = [20, 30, 40]
 stop_levels = [0.00, -0.10]
-
 scenario = 2
 
 # ============================================================
-# 🔥 원본 엔진 (비교용 - 전략 로직 그대로)
+# 🔥 원본 엔진 (전략 로직 그대로)
 # ============================================================
 
 grouped_original = list(df.groupby("Date", sort=False))
@@ -58,6 +57,7 @@ def run_backtest(profit_target, ev_cut, max_days, stop_level, scenario):
         else:
             if ticker not in day_data.index:
                 continue
+
             row = day_data.loc[ticker]
             holding_day += 1
             actual_max_holding_days = max(actual_max_holding_days, holding_day)
@@ -128,7 +128,7 @@ def run_backtest(profit_target, ev_cut, max_days, stop_level, scenario):
     )
 
 # ============================================================
-# 🔥 Numpy Engine (Single Date Loop)
+# 🔥 Numpy Engine
 # ============================================================
 
 param_grid = []
@@ -190,7 +190,6 @@ for date, day_data in grouped:
             actual_max_holding_days[i] = max(
                 actual_max_holding_days[i], holding_day[i]
             )
-
             avg_price = total_invested[i] / total_shares[i]
 
             if row["High"] >= avg_price * (1 + profit_target):
@@ -245,7 +244,7 @@ for date, day_data in grouped:
         max_dd[i] = min(max_dd[i], dd)
 
 # ============================================================
-# 🔥 원본 vs Numpy 단일 파라미터 검증
+# 🔥 단일 파라미터 완전 일치 검증 (수정 부분)
 # ============================================================
 
 TEST_Q = 0.65
@@ -273,9 +272,22 @@ for i, (q, ev_cut, profit_target, max_days, stop_level) in enumerate(param_grid)
         and max_days == TEST_MAX_DAYS
         and stop_level == TEST_STOP
     ):
+        # 🔥 수정: 마지막 포지션 평가금액 반영
+        if in_position[i]:
+            last_date = df["Date"].max()
+            last_day = df[df["Date"] == last_date].set_index("Ticker")
+            if picked_ticker[i] in last_day.index:
+                current_value = total_shares[i] * last_day.loc[picked_ticker[i]]["Close"]
+            else:
+                current_value = 0
+        else:
+            current_value = 0
+
+        final_equity = seed[i] + current_value  # 🔥 수정
+
         numpy_result = (
-            (seed[i] / INITIAL_SEED) - 1,
-            seed[i] / INITIAL_SEED,
+            (final_equity / INITIAL_SEED) - 1,   # 🔥 수정
+            final_equity / INITIAL_SEED,         # 🔥 수정
             max_dd[i],
             idle_days[i],
             win_trades[i] / total_trades[i] if total_trades[i] > 0 else 0,
