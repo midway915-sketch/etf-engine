@@ -48,6 +48,8 @@ picked_ticker = np.array([None] * P, dtype=object)
 cycle_unit = np.zeros(P)
 cycle_start_seed = np.zeros(P)
 cycle_max_loss = np.zeros(P)
+cycle_start_date[i] = date   # 🔥 추가
+cycle_start_date = np.array([None] * P, dtype=object)  # 🔥 추가
 
 cycle_min_return = np.zeros(P)  # 🔥 추가 (사이클 내부 최저 수익률 추적)
 
@@ -117,7 +119,8 @@ for date, day_data in grouped:
 
                 # 🔥 추가: RAW 저장
                 cycle_raw_records.append({
-                    "Date": date,
+                    "Cycle_Start_Date": cycle_start_date[i],   # 🔥 추가
+                    "Cycle_End_Date": date,                    # 🔥 추가
                     "Scenario": scenario,
                     "Param_Index": i,
                     "Ticker": picked_ticker[i],
@@ -156,7 +159,8 @@ for date, day_data in grouped:
 
                     # 🔥 추가: RAW 저장
                     cycle_raw_records.append({
-                        "Date": date,
+                        "Cycle_Start_Date": cycle_start_date[i],   # 🔥 추가
+                        "Cycle_End_Date": date,                    # 🔥 추가
                         "Scenario": scenario,
                         "Param_Index": i,
                         "Ticker": picked_ticker[i],
