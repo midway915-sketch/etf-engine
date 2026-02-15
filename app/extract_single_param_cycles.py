@@ -6,7 +6,7 @@ import numpy as np
 # ============================================================
 INPUT_PATH = "data/backtest_panel.csv"
 PARAM_PATH = "data/parametric_results_v2.csv"
-OUTPUT_PATH = "data/top_cycles_extracted.csv"
+OUTPUT_PATH = "data/single_param_cycle_results.csv"
 
 INITIAL_SEED = 40_000_000
 
