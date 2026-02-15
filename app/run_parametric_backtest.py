@@ -20,7 +20,6 @@ results = []
 # scenario = 2  → 보유일 이후에도 stop 도달까지 계속 매수
 # 🔥 복리 구조 적용 (daily_amount = seed / max_days)
 # ==========================================================
-
 def run_backtest(ev_cut, max_days, stop_level, scenario):
 
     seed = INITIAL_SEED
@@ -28,17 +27,18 @@ def run_backtest(ev_cut, max_days, stop_level, scenario):
     idle_days = 0
     total_trades = 0
     win_trades = 0
+
     total_shares = 0
     total_invested = 0
     holding_day = 0
     extending = False
+    real_max_holding = 0   
 
     equity_curve = []
     max_equity = seed
     max_dd = 0
-    max_holding_observed = 0   # 🔥 실제 최대 보유일 기록
 
-    current_price = 0   # 🔥 현재가 안전 저장용
+    max_holding_observed = 0   # 🔥 실제 최대 보유일 기록
 
     grouped = df.groupby("Date")
 
@@ -58,8 +58,6 @@ def run_backtest(ev_cut, max_days, stop_level, scenario):
                 pick = candidates.sort_values("Max_Drawdown", ascending=False).iloc[0]
 
                 price = pick["Close"]
-                current_price = price  # 🔥 현재가 기록
-
                 invest = daily_amount
                 shares = invest / price
 
@@ -80,14 +78,13 @@ def run_backtest(ev_cut, max_days, stop_level, scenario):
         # ===============================
         else:
 
-            row_df = day_data[day_data["Ticker"] == pick["Ticker"]]
+            row = day_data[day_data["Ticker"] == pick["Ticker"]]
+            if row.empty:
+                continue
 
-            if not row_df.empty:
-                row = row_df.iloc[0]
-                current_price = row["Close"]  # 🔥 안전 현재가 업데이트
-            # 🔥 row 없으면 이전 current_price 유지
-
+            row = row.iloc[0]
             holding_day += 1
+            real_max_holding = max(real_max_holding, holding_day)
 
             # 🔥 실제 최대 보유일 업데이트
             if holding_day > max_holding_observed:
@@ -98,23 +95,23 @@ def run_backtest(ev_cut, max_days, stop_level, scenario):
             # -----------------------------
             # 1️⃣ +10% 익절
             # -----------------------------
-            if row_df is not None and not row_df.empty:
-                if row["High"] >= avg_price * 1.10:
-                    sell_price = avg_price * 1.10
-                    proceeds = total_shares * sell_price
-                    profit = proceeds - total_invested
+            if row["High"] >= avg_price * 1.10:
 
-                    seed += proceeds
+                sell_price = avg_price * 1.10
+                proceeds = total_shares * sell_price
+                profit = proceeds - total_invested
 
-                    total_trades += 1
-                    if profit > 0:
-                        win_trades += 1
+                seed += proceeds
 
-                    in_position = False
-                    total_shares = 0
-                    total_invested = 0
-                    holding_day = 0
-                    continue
+                total_trades += 1
+                if profit > 0:
+                    win_trades += 1
+
+                in_position = False
+                total_shares = 0
+                total_invested = 0
+                holding_day = 0
+                continue
 
             # -----------------------------
             # 2️⃣ 보유일 도달
@@ -123,7 +120,7 @@ def run_backtest(ev_cut, max_days, stop_level, scenario):
 
                 if scenario == 1:
 
-                    sell_price = current_price  # 🔥 안전 가격 사용
+                    sell_price = row["Close"]
                     proceeds = total_shares * sell_price
                     profit = proceeds - total_invested
 
@@ -145,7 +142,7 @@ def run_backtest(ev_cut, max_days, stop_level, scenario):
             # -----------------------------
             # 3️⃣ Scenario 2 연장 구간
             # -----------------------------
-            if extending and row_df is not None and not row_df.empty:
+            if extending:
 
                 if row["Low"] <= avg_price * (1 + stop_level):
 
@@ -168,9 +165,11 @@ def run_backtest(ev_cut, max_days, stop_level, scenario):
             # -----------------------------
             # 4️⃣ 추가 매수
             # -----------------------------
-            if current_price <= avg_price * 1.05:
+            close_price = row["Close"]
 
-                if current_price >= avg_price:
+            if close_price <= avg_price * 1.05:
+
+                if close_price >= avg_price:
                     invest = daily_amount * 0.5
                 else:
                     invest = daily_amount
@@ -178,53 +177,48 @@ def run_backtest(ev_cut, max_days, stop_level, scenario):
                 invest = min(invest, seed)
 
                 if invest > 0:
-                    shares = invest / current_price
+                    shares = invest / close_price
                     total_shares += shares
                     total_invested += invest
                     seed -= invest
 
         # ===============================
-        # 🔥 MDD 계산 (현금 + 평가금액 기준)
+        # 🔥 MDD 계산 (현금 + 평가금액 기준으로 수정)
         # ===============================
-
         if in_position:
-            current_value = total_shares * current_price
+            # 🔥 row 안전 확보
+            row_current = day_data[day_data["Ticker"] == pick["Ticker"]]
+            if not row_current.empty:
+                current_price = row_current.iloc[0]["Close"]
+                current_value = total_shares * current_price
+            else:
+                current_value = 0
         else:
             current_value = 0
 
-        total_equity = seed + current_value
+        equity = seed + current_value   # 🔥 총 자산 기준
+        equity_curve.append(equity)
 
-        equity_curve.append(total_equity)
+        if equity > max_equity:
+            max_equity = equity
 
-        if total_equity > max_equity:
-            max_equity = total_equity
-
-        dd = (total_equity - max_equity) / max_equity
-
+        dd = (equity - max_equity) / max_equity
         if dd < max_dd:
             max_dd = dd
 
-    # 🔥 루프 종료 후 최종 equity 보장 계산
-    final_equity = seed if not in_position else seed + total_shares * current_price
 
-    total_return = (final_equity / INITIAL_SEED) - 1
+    total_return = (total_equity / INITIAL_SEED) - 1
     success_rate = win_trades / total_trades if total_trades > 0 else 0
 
-    return (
-        total_return,
-        final_equity / INITIAL_SEED,
-        max_dd,
-        idle_days,
-        success_rate,
-        max_holding_observed
-    )
+    return total_return, seed / INITIAL_SEED, max_dd, idle_days, success_rate, real_max_holding  # 🔥 수정
+
 
 # ==========================================================
 # 파라미터 루프
 # ==========================================================
-
 for scenario in [1, 2]:
     for q in ev_quantiles:
+
         ev_cut = df["EV"].quantile(q)
 
         for max_days in holding_days_list:
@@ -245,7 +239,7 @@ for scenario in [1, 2]:
                     "Max_Drawdown": mdd,
                     "Idle_Days": idle,
                     "Success_Rate": sr,
-                    "Actual_Max_Holding_Days": real_max_hold
+                    "Real_Max_Holding_Days": real_max_hold,   # 🔥 추가
                 })
 
 results_df = pd.DataFrame(results)
@@ -253,5 +247,5 @@ results_df = results_df.sort_values("Seed_Multiple", ascending=False)
 
 results_df.to_csv(OUTPUT_PATH, index=False)
 
-print("✅ Parametric backtest v2 complete (Stable + Real MDD + Real Holding Days)")
+print("✅ Parametric backtest v2 complete (Compounding + Real MDD + Real Holding Days)")
 print(results_df.head(10))
