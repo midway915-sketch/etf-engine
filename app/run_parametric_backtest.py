@@ -2,7 +2,8 @@ import pandas as pd
 import numpy as np
 
 INPUT_PATH = "data/backtest_panel.csv"
-OUTPUT_PATH = "data/cycle_raw_results.csv"   # 🔥 수정: raw 전용 파일로 변경
+OUTPUT_PATH = "data/parametric_results_v2.csv"
+RAW_PATH = "data/cycle_raw_results.csv"
 INITIAL_SEED = 40_000_000
 
 df = pd.read_csv(INPUT_PATH, parse_dates=["Date"])
@@ -179,9 +180,15 @@ for date, day_data in grouped:
 # ============================================================
 # 🔥 수정: RAW CSV 저장
 # ============================================================
+results_df = pd.DataFrame(results)
+results_df = results_df.sort_values("Seed_Multiple", ascending=False)
+results_df.to_csv(OUTPUT_PATH, index=False)
+
+print("✅ Numpy Engine Complete (Cycle Max Loss Applied)")
+print(results_df.head(10))
 
 cycle_raw_df = pd.DataFrame(cycle_raw_records)
-cycle_raw_df.to_csv(OUTPUT_PATH, index=False)
+cycle_raw_df.to_csv(RAW_PATH, index=False)
 
 print("✅ Cycle RAW data saved")
 print(cycle_raw_df.head())
