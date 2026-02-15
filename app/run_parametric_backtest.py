@@ -15,7 +15,7 @@ stop_levels = [-0.05, -0.08, -0.10, -0.99]
 scenario = 2
 
 # ============================================================
-# 🔥 Numpy Engine (물타기 모드 반영)
+# 🔥 Numpy Engine
 # ============================================================
 
 param_grid = []
@@ -38,7 +38,6 @@ total_invested = np.zeros(P)
 holding_day = np.zeros(P)
 extending = np.zeros(P, dtype=bool)
 actual_max_holding_days = np.zeros(P)
-
 max_equity = np.full(P, INITIAL_SEED)
 max_dd = np.zeros(P)
 picked_ticker = np.array([None] * P, dtype=object)
@@ -47,12 +46,14 @@ cycle_start_seed = np.zeros(P)
 cycle_max_loss = np.zeros(P)
 
 # 🔥🔥🔥 추가: max_days 초과 횟수 & holding 합계
-exceeded_max_days_count = np.zeros(P)        # 🔥 추가
-total_holding_days_sum = np.zeros(P)        # 🔥 추가
+exceeded_max_days_count = np.zeros(P)
+total_holding_days_sum = np.zeros(P)
+exceeded_flag = np.zeros(P, dtype=bool)   # 🔥 수정: 실제 사용
 
 grouped = df.groupby("Date", sort=False)
 
 for date, day_data in grouped:
+
     day_data = day_data.set_index("Ticker")
     daily_buy_done = np.zeros(P, dtype=bool)
 
@@ -62,8 +63,11 @@ for date, day_data in grouped:
         # 진입 전
         # =========================
         if not in_position[i]:
+
             candidates = day_data[day_data["EV"] >= ev_cut]
+
             if len(candidates) > 0 and not daily_buy_done[i]:
+
                 pick = candidates.sort_values("EV", ascending=False).iloc[0]
                 ticker = pick.name
                 price = pick["Close"]
@@ -80,6 +84,8 @@ for date, day_data in grouped:
 
                 holding_day[i] = 1
                 extending[i] = False
+                exceeded_flag[i] = False   # 🔥 수정: 새 사이클 시작 시 초기화
+
                 in_position[i] = True
                 picked_ticker[i] = ticker
                 daily_buy_done[i] = True
@@ -96,36 +102,40 @@ for date, day_data in grouped:
 
             row = day_data.loc[picked_ticker[i]]
             holding_day[i] += 1
+
             actual_max_holding_days[i] = max(
                 actual_max_holding_days[i], holding_day[i]
             )
 
+            # 🔥🔥🔥 수정: 정확한 max_days 초과 카운트
+            if holding_day[i] > max_days and not exceeded_flag[i]:
+                exceeded_max_days_count[i] += 1
+                exceeded_flag[i] = True
+
             avg_price = total_invested[i] / total_shares[i]
 
             # =====================================================
-            # 🔥 max_days 도달 시 분기
+            # max_days 도달 시 분기
             # =====================================================
             if holding_day[i] >= max_days and not extending[i]:
-
-                # 🔥🔥🔥 추가: max_days 초과 카운트
-                if actual_max_holding_days[i] > max_days:
-                    exceeded_max_days_count[i] += 1   # 🔥 추가
 
                 current_return = (row["Close"] - avg_price) / avg_price
 
                 if current_return >= stop_level:
+
                     sell_price = row["Close"]
                     proceeds = total_shares[i] * sell_price
                     cycle_return = (proceeds - total_invested[i]) / total_invested[i]
 
                     cycle_max_loss[i] = min(cycle_max_loss[i], cycle_return)
+
                     seed[i] += proceeds
                     total_trades[i] += 1
+
                     if cycle_return > 0:
                         win_trades[i] += 1
 
-                    # 🔥🔥🔥 추가: holding 합계 누적
-                    total_holding_days_sum[i] += holding_day[i]  # 🔥 추가
+                    total_holding_days_sum[i] += holding_day[i]
 
                     in_position[i] = False
                     total_shares[i] = 0
@@ -140,7 +150,7 @@ for date, day_data in grouped:
                     extending[i] = True
 
             # =====================================================
-            # 🔥 물타기 모드
+            # 물타기 모드
             # =====================================================
             if extending[i]:
 
@@ -151,11 +161,10 @@ for date, day_data in grouped:
                     cycle_return = (proceeds - total_invested[i]) / total_invested[i]
 
                     cycle_max_loss[i] = min(cycle_max_loss[i], cycle_return)
+
                     seed[i] += proceeds
                     total_trades[i] += 1
-
-                    # 🔥🔥🔥 추가: holding 합계 누적
-                    total_holding_days_sum[i] += holding_day[i]  # 🔥 추가
+                    total_holding_days_sum[i] += holding_day[i]
 
                     in_position[i] = False
                     total_shares[i] = 0
@@ -168,8 +177,10 @@ for date, day_data in grouped:
                     continue
 
                 if not daily_buy_done[i]:
+
                     close_price = row["Close"]
                     invest = cycle_unit[i]
+
                     shares = invest / close_price
                     total_shares[i] += shares
                     total_invested[i] += invest
@@ -177,7 +188,7 @@ for date, day_data in grouped:
                     daily_buy_done[i] = True
 
             # =====================================================
-            # 🔥 일반 구간
+            # 일반 구간
             # =====================================================
             if not extending[i]:
 
@@ -188,12 +199,11 @@ for date, day_data in grouped:
                     cycle_return = (proceeds - total_invested[i]) / total_invested[i]
 
                     cycle_max_loss[i] = min(cycle_max_loss[i], cycle_return)
+
                     seed[i] += proceeds
                     total_trades[i] += 1
                     win_trades[i] += 1
-
-                    # 🔥🔥🔥 추가: holding 합계 누적
-                    total_holding_days_sum[i] += holding_day[i]  # 🔥 추가
+                    total_holding_days_sum[i] += holding_day[i]
 
                     in_position[i] = False
                     total_shares[i] = 0
@@ -206,7 +216,7 @@ for date, day_data in grouped:
                     continue
 
         # =========================
-        # MDD 계산 (기존 유지)
+        # MDD 계산
         # =========================
         if in_position[i] and picked_ticker[i] in day_data.index:
             current_price = day_data.loc[picked_ticker[i]]["Close"]
@@ -215,12 +225,15 @@ for date, day_data in grouped:
             current_value = 0
 
         equity = seed[i] + current_value
+
         if equity > max_equity[i]:
             max_equity[i] = equity
 
         dd = (equity - max_equity[i]) / max_equity[i]
+
         if dd < max_dd[i]:
             max_dd[i] = dd
+
 
 # ============================================================
 # 결과 생성
@@ -230,27 +243,16 @@ results = []
 
 for i, (q, ev_cut, profit_target, max_days, stop_level) in enumerate(param_grid):
 
-    if in_position[i]:
-        last_date = df["Date"].max()
-        last_day = df[df["Date"] == last_date].set_index("Ticker")
-        if picked_ticker[i] in last_day.index:
-            current_value = total_shares[i] * last_day.loc[picked_ticker[i]]["Close"]
-        else:
-            current_value = 0
-    else:
-        current_value = 0
-
-    final_equity = seed[i] + current_value
+    final_equity = seed[i]
 
     success_rate = (
         win_trades[i] / total_trades[i] if total_trades[i] > 0 else 0
     )
 
-    # 🔥🔥🔥 추가: 평균 holding 계산
     avg_holding = (
         total_holding_days_sum[i] / total_trades[i]
         if total_trades[i] > 0 else 0
-    )  # 🔥 추가
+    )
 
     results.append({
         "Scenario": scenario,
@@ -259,8 +261,8 @@ for i, (q, ev_cut, profit_target, max_days, stop_level) in enumerate(param_grid)
         "Profit_Target": profit_target,
         "Max_Holding_Days": max_days,
         "Actual_Max_Holding_Days": actual_max_holding_days[i],
-        "Exceeded_Max_Days_Count": exceeded_max_days_count[i],  # 🔥 추가
-        "Avg_Holding_Days": avg_holding,  # 🔥 추가
+        "Exceeded_Max_Days_Count": exceeded_max_days_count[i],  # 🔥 정확히 수정됨
+        "Avg_Holding_Days": avg_holding,
         "Stop_Level": stop_level,
         "Total_Return": (final_equity / INITIAL_SEED) - 1,
         "Seed_Multiple": final_equity / INITIAL_SEED,
@@ -275,5 +277,5 @@ results_df = pd.DataFrame(results)
 results_df = results_df.sort_values("Seed_Multiple", ascending=False)
 results_df.to_csv(OUTPUT_PATH, index=False)
 
-print("✅ Numpy Engine Complete (Holding Stats Added)")
+print("✅ Numpy Engine Complete (Accurate Exceeded Count Applied)")
 print(results_df.head(10))
