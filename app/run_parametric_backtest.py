@@ -10,8 +10,8 @@ df = df.sort_values(["Date", "Ticker"])
 
 profit_targets = [0.05, 0.10, 0.15]
 ev_quantiles = [0.65, 0.70, 0.75]
-holding_days_list = [35, 40, 45]
-stop_levels = [-0.05, -0.08, -0.10, -0.12]
+holding_days_list = [30, 40, 45]
+stop_levels = [-0.05, -0.08, -0.10, -0.12, -0.99]
 scenario = 2
 
 # ============================================================
