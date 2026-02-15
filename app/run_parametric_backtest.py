@@ -182,13 +182,16 @@ for date, day_data in grouped:
 # ============================================================
 results_df = pd.DataFrame(results)
 results_df = results_df.sort_values("Seed_Multiple", ascending=False)
-results_df.to_csv(OUTPUT_PATH, index=False)
 
+# 🔥 수정: parametric 결과 저장
+results_df.to_csv(OUTPUT_PATH, index=False)
 print("✅ Numpy Engine Complete (Cycle Max Loss Applied)")
 print(results_df.head(10))
 
+# 🔥 수정: RAW 데이터 DataFrame 생성 및 저장
 cycle_raw_df = pd.DataFrame(cycle_raw_records)
 cycle_raw_df.to_csv(RAW_PATH, index=False)
 
 print("✅ Cycle RAW data saved")
 print(cycle_raw_df.head())
+
