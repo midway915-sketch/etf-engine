@@ -16,7 +16,7 @@ stop_levels = [0.00, -0.05, -0.10]
 scenario = 2
 
 # ============================================================
-# 🔥 Numpy Engine (전략 정의 완전 반영 + 상태 초기화 보강)
+# 🔥 Numpy Engine (하루 1회 매수 제한 추가)
 # ============================================================
 
 param_grid = []
@@ -43,14 +43,16 @@ max_equity = np.full(P, INITIAL_SEED)
 max_dd = np.zeros(P)
 picked_ticker = np.array([None] * P, dtype=object)
 
-# 🔥 사이클 고정 분할금 상태
 cycle_unit = np.zeros(P)
 cycle_start_seed = np.zeros(P)
 
 grouped = df.groupby("Date", sort=False)
 
 for date, day_data in grouped:
+
     day_data = day_data.set_index("Ticker")
+
+    daily_buy_done = np.zeros(P, dtype=bool)   # 🔥 수정: 하루 1회 매수 제한
 
     for i, (q, ev_cut, profit_target, max_days, stop_level) in enumerate(param_grid):
 
@@ -61,12 +63,12 @@ for date, day_data in grouped:
 
             candidates = day_data[day_data["EV"] >= ev_cut]
 
-            if len(candidates) > 0:
+            if len(candidates) > 0 and not daily_buy_done[i]:  # 🔥 수정
+
                 pick = candidates.sort_values("EV", ascending=False).iloc[0]
                 ticker = pick.name
                 price = pick["Close"]
 
-                # 🔥 수정: 사이클 시작 시 분할금 고정
                 cycle_start_seed[i] = seed[i]
                 cycle_unit[i] = cycle_start_seed[i] / max_days
 
@@ -75,12 +77,14 @@ for date, day_data in grouped:
 
                 total_shares[i] = shares
                 total_invested[i] = invest
-                seed[i] -= invest  # 🔥 수정: 음수 허용
+                seed[i] -= invest
 
                 holding_day[i] = 1
                 extending[i] = False
                 in_position[i] = True
                 picked_ticker[i] = ticker
+
+                daily_buy_done[i] = True   # 🔥 수정: 하루 1회 매수 처리
 
             else:
                 idle_days[i] += 1
@@ -114,7 +118,6 @@ for date, day_data in grouped:
                 if profit > 0:
                     win_trades[i] += 1
 
-                # 🔥 수정: 사이클 상태 완전 초기화
                 in_position[i] = False
                 total_shares[i] = 0
                 total_invested[i] = 0
@@ -143,7 +146,6 @@ for date, day_data in grouped:
                     if profit > 0:
                         win_trades[i] += 1
 
-                    # 🔥 수정: 사이클 상태 완전 초기화
                     in_position[i] = False
                     total_shares[i] = 0
                     total_invested[i] = 0
@@ -158,13 +160,19 @@ for date, day_data in grouped:
             # ---------- 추가매수 ----------
             close_price = row["Close"]
 
-            if close_price <= avg_price * 1.05:
-                invest = cycle_unit[i]  # 🔥 수정: 항상 고정 분할금
+            if (
+                close_price <= avg_price * 1.05
+                and not daily_buy_done[i]          # 🔥 수정: 하루 1회만
+            ):
+
+                invest = cycle_unit[i]
                 shares = invest / close_price
 
                 total_shares[i] += shares
                 total_invested[i] += invest
-                seed[i] -= invest  # 🔥 수정: 음수 허용
+                seed[i] -= invest
+
+                daily_buy_done[i] = True          # 🔥 수정
 
         # =========================
         # MDD 계산
@@ -196,6 +204,7 @@ for i, (q, ev_cut, profit_target, max_days, stop_level) in enumerate(param_grid)
     if in_position[i]:
         last_date = df["Date"].max()
         last_day = df[df["Date"] == last_date].set_index("Ticker")
+
         if picked_ticker[i] in last_day.index:
             current_value = total_shares[i] * last_day.loc[picked_ticker[i]]["Close"]
         else:
@@ -229,5 +238,5 @@ results_df = pd.DataFrame(results)
 results_df = results_df.sort_values("Seed_Multiple", ascending=False)
 results_df.to_csv(OUTPUT_PATH, index=False)
 
-print("✅ Numpy Engine Complete (Strategy Fully Corrected)")
+print("✅ Numpy Engine Complete (1 Buy Per Day Added)")
 print(results_df.head(10))
