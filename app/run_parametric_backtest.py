@@ -12,6 +12,7 @@ profit_targets = [0.10, 0.15, 0.20]
 ev_quantiles = [0.65, 0.70, 0.75]
 holding_days_list = [27, 28, 29, 30, 31, 32]
 stop_levels = [-0.05, -0.08, -0.10, -0.99]
+
 scenario = 2
 
 # ============================================================
@@ -45,15 +46,14 @@ cycle_unit = np.zeros(P)
 cycle_start_seed = np.zeros(P)
 cycle_max_loss = np.zeros(P)
 
-# 🔥🔥🔥 추가: max_days 초과 횟수 & holding 합계
+# 🔥🔥🔥 수정: 초과 횟수 & 평균 보유일 계산용
 exceeded_max_days_count = np.zeros(P)
 total_holding_days_sum = np.zeros(P)
-exceeded_flag = np.zeros(P, dtype=bool)   # 🔥 수정: 실제 사용
+exceeded_flag = np.zeros(P, dtype=bool)
 
 grouped = df.groupby("Date", sort=False)
 
 for date, day_data in grouped:
-
     day_data = day_data.set_index("Ticker")
     daily_buy_done = np.zeros(P, dtype=bool)
 
@@ -84,11 +84,12 @@ for date, day_data in grouped:
 
                 holding_day[i] = 1
                 extending[i] = False
-                exceeded_flag[i] = False   # 🔥 수정: 새 사이클 시작 시 초기화
+                exceeded_flag[i] = False   # 🔥🔥🔥 수정: 새 사이클 시작 시 초기화
 
                 in_position[i] = True
                 picked_ticker[i] = ticker
                 daily_buy_done[i] = True
+
             else:
                 idle_days[i] += 1
 
@@ -107,7 +108,7 @@ for date, day_data in grouped:
                 actual_max_holding_days[i], holding_day[i]
             )
 
-            # 🔥🔥🔥 수정: 정확한 max_days 초과 카운트
+            # 🔥🔥🔥 수정: max_days 초과 최초 1회만 카운트
             if holding_day[i] > max_days and not exceeded_flag[i]:
                 exceeded_max_days_count[i] += 1
                 exceeded_flag[i] = True
@@ -125,8 +126,8 @@ for date, day_data in grouped:
 
                     sell_price = row["Close"]
                     proceeds = total_shares[i] * sell_price
-                    cycle_return = (proceeds - total_invested[i]) / total_invested[i]
 
+                    cycle_return = (proceeds - total_invested[i]) / total_invested[i]
                     cycle_max_loss[i] = min(cycle_max_loss[i], cycle_return)
 
                     seed[i] += proceeds
@@ -135,7 +136,7 @@ for date, day_data in grouped:
                     if cycle_return > 0:
                         win_trades[i] += 1
 
-                    total_holding_days_sum[i] += holding_day[i]
+                    total_holding_days_sum[i] += holding_day[i]  # 🔥🔥🔥 수정
 
                     in_position[i] = False
                     total_shares[i] = 0
@@ -145,6 +146,7 @@ for date, day_data in grouped:
                     cycle_unit[i] = 0
                     cycle_start_seed[i] = 0
                     picked_ticker[i] = None
+
                     continue
                 else:
                     extending[i] = True
@@ -158,13 +160,14 @@ for date, day_data in grouped:
 
                     sell_price = avg_price * (1 + stop_level)
                     proceeds = total_shares[i] * sell_price
-                    cycle_return = (proceeds - total_invested[i]) / total_invested[i]
 
+                    cycle_return = (proceeds - total_invested[i]) / total_invested[i]
                     cycle_max_loss[i] = min(cycle_max_loss[i], cycle_return)
 
                     seed[i] += proceeds
                     total_trades[i] += 1
-                    total_holding_days_sum[i] += holding_day[i]
+
+                    total_holding_days_sum[i] += holding_day[i]  # 🔥🔥🔥 수정
 
                     in_position[i] = False
                     total_shares[i] = 0
@@ -174,13 +177,12 @@ for date, day_data in grouped:
                     cycle_unit[i] = 0
                     cycle_start_seed[i] = 0
                     picked_ticker[i] = None
+
                     continue
 
                 if not daily_buy_done[i]:
-
                     close_price = row["Close"]
                     invest = cycle_unit[i]
-
                     shares = invest / close_price
                     total_shares[i] += shares
                     total_invested[i] += invest
@@ -196,14 +198,15 @@ for date, day_data in grouped:
 
                     sell_price = avg_price * (1 + profit_target)
                     proceeds = total_shares[i] * sell_price
-                    cycle_return = (proceeds - total_invested[i]) / total_invested[i]
 
+                    cycle_return = (proceeds - total_invested[i]) / total_invested[i]
                     cycle_max_loss[i] = min(cycle_max_loss[i], cycle_return)
 
                     seed[i] += proceeds
                     total_trades[i] += 1
                     win_trades[i] += 1
-                    total_holding_days_sum[i] += holding_day[i]
+
+                    total_holding_days_sum[i] += holding_day[i]  # 🔥🔥🔥 수정
 
                     in_position[i] = False
                     total_shares[i] = 0
@@ -213,6 +216,7 @@ for date, day_data in grouped:
                     cycle_unit[i] = 0
                     cycle_start_seed[i] = 0
                     picked_ticker[i] = None
+
                     continue
 
         # =========================
@@ -230,7 +234,6 @@ for date, day_data in grouped:
             max_equity[i] = equity
 
         dd = (equity - max_equity[i]) / max_equity[i]
-
         if dd < max_dd[i]:
             max_dd[i] = dd
 
@@ -243,7 +246,7 @@ results = []
 
 for i, (q, ev_cut, profit_target, max_days, stop_level) in enumerate(param_grid):
 
-    final_equity = seed[i]
+    final_equity = seed[i]   # 🔥 기존 로직 유지
 
     success_rate = (
         win_trades[i] / total_trades[i] if total_trades[i] > 0 else 0
@@ -261,8 +264,8 @@ for i, (q, ev_cut, profit_target, max_days, stop_level) in enumerate(param_grid)
         "Profit_Target": profit_target,
         "Max_Holding_Days": max_days,
         "Actual_Max_Holding_Days": actual_max_holding_days[i],
-        "Exceeded_Max_Days_Count": exceeded_max_days_count[i],  # 🔥 정확히 수정됨
-        "Avg_Holding_Days": avg_holding,
+        "Exceeded_Max_Days_Count": exceeded_max_days_count[i],  # 🔥🔥🔥 수정
+        "Avg_Holding_Days": avg_holding,                        # 🔥🔥🔥 수정
         "Stop_Level": stop_level,
         "Total_Return": (final_equity / INITIAL_SEED) - 1,
         "Seed_Multiple": final_equity / INITIAL_SEED,
