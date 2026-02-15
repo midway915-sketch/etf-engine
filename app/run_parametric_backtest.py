@@ -149,11 +149,11 @@ for date, day_data in grouped:
                     seed[i] -= invest
 
         # MDD
-        current_value = (
-            total_shares[i] * row["Close"]
-            if in_position[i] and picked_ticker in day_data.index
-            else 0
-        )
+        if in_position[i] and picked_ticker in day_data.index:
+            current_price = day_data.loc[picked_ticker]["Close"]
+            current_value = total_shares[i] * current_price
+        else:
+            current_value = 0
 
         equity = seed[i] + current_value
 
