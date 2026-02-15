@@ -12,11 +12,10 @@ profit_targets = [0.05, 0.10, 0.15]
 ev_quantiles = [0.65, 0.70, 0.75]
 holding_days_list = [20, 30, 40]
 stop_levels = [0.00, -0.05, -0.10]
-
 scenario = 2
 
 # ============================================================
-# 🔥 Numpy Engine (하루 1회 매수 제한 추가)
+# 🔥 Numpy Engine (승리조건 수정 + 최대손실률 추가)
 # ============================================================
 
 param_grid = []
@@ -51,8 +50,7 @@ grouped = df.groupby("Date", sort=False)
 for date, day_data in grouped:
 
     day_data = day_data.set_index("Ticker")
-
-    daily_buy_done = np.zeros(P, dtype=bool)   # 🔥 수정: 하루 1회 매수 제한
+    daily_buy_done = np.zeros(P, dtype=bool)
 
     for i, (q, ev_cut, profit_target, max_days, stop_level) in enumerate(param_grid):
 
@@ -60,10 +58,8 @@ for date, day_data in grouped:
         # 진입 전
         # =========================
         if not in_position[i]:
-
             candidates = day_data[day_data["EV"] >= ev_cut]
-
-            if len(candidates) > 0 and not daily_buy_done[i]:  # 🔥 수정
+            if len(candidates) > 0 and not daily_buy_done[i]:
 
                 pick = candidates.sort_values("EV", ascending=False).iloc[0]
                 ticker = pick.name
@@ -84,8 +80,7 @@ for date, day_data in grouped:
                 in_position[i] = True
                 picked_ticker[i] = ticker
 
-                daily_buy_done[i] = True   # 🔥 수정: 하루 1회 매수 처리
-
+                daily_buy_done[i] = True
             else:
                 idle_days[i] += 1
 
@@ -98,7 +93,6 @@ for date, day_data in grouped:
                 continue
 
             row = day_data.loc[picked_ticker[i]]
-
             holding_day[i] += 1
             actual_max_holding_days[i] = max(
                 actual_max_holding_days[i], holding_day[i]
@@ -111,12 +105,11 @@ for date, day_data in grouped:
 
                 sell_price = avg_price * (1 + profit_target)
                 proceeds = total_shares[i] * sell_price
-                profit = proceeds - total_invested[i]
 
                 seed[i] += proceeds
                 total_trades[i] += 1
-                if profit > 0:
-                    win_trades[i] += 1
+
+                win_trades[i] += 1   # 🔥 수정: profit_target 도달 시에만 승리
 
                 in_position[i] = False
                 total_shares[i] = 0
@@ -139,12 +132,11 @@ for date, day_data in grouped:
 
                     sell_price = avg_price * (1 + stop_level)
                     proceeds = total_shares[i] * sell_price
-                    profit = proceeds - total_invested[i]
 
                     seed[i] += proceeds
                     total_trades[i] += 1
-                    if profit > 0:
-                        win_trades[i] += 1
+
+                    # 🔥 수정: 손절은 패배 (win_trades 증가 안함)
 
                     in_position[i] = False
                     total_shares[i] = 0
@@ -159,11 +151,7 @@ for date, day_data in grouped:
 
             # ---------- 추가매수 ----------
             close_price = row["Close"]
-
-            if (
-                close_price <= avg_price * 1.05
-                and not daily_buy_done[i]          # 🔥 수정: 하루 1회만
-            ):
+            if close_price <= avg_price * 1.05 and not daily_buy_done[i]:
 
                 invest = cycle_unit[i]
                 shares = invest / close_price
@@ -172,7 +160,7 @@ for date, day_data in grouped:
                 total_invested[i] += invest
                 seed[i] -= invest
 
-                daily_buy_done[i] = True          # 🔥 수정
+                daily_buy_done[i] = True
 
         # =========================
         # MDD 계산
@@ -229,6 +217,7 @@ for i, (q, ev_cut, profit_target, max_days, stop_level) in enumerate(param_grid)
         "Total_Return": (final_equity / INITIAL_SEED) - 1,
         "Seed_Multiple": final_equity / INITIAL_SEED,
         "Max_Drawdown": max_dd[i],
+        "Max_Loss_Rate": max_dd[i],   # 🔥 수정: 최대 손실률 컬럼 추가
         "Idle_Days": idle_days[i],
         "Success_Rate": success_rate,
         "Cycle_Count": total_trades[i],
@@ -238,5 +227,5 @@ results_df = pd.DataFrame(results)
 results_df = results_df.sort_values("Seed_Multiple", ascending=False)
 results_df.to_csv(OUTPUT_PATH, index=False)
 
-print("✅ Numpy Engine Complete (1 Buy Per Day Added)")
+print("✅ Numpy Engine Complete (Win Rule Fixed + Max Loss Added)")
 print(results_df.head(10))
