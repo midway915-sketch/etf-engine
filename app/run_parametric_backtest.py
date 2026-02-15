@@ -9,9 +9,9 @@ df = pd.read_csv(INPUT_PATH, parse_dates=["Date"])
 df = df.sort_values(["Date", "Ticker"])
 
 profit_targets = [0.05, 0.10, 0.15, 0.20]
-ev_quantiles = [0.60, 0.64, 0.68, 0.72, 0.76, 0.80]
-holding_days_list = [26, 28, 30, 32, 34, 36, 38, 40, 42, 44, 46, 48, 50]
-stop_levels = [-0.99]
+ev_quantiles = [0.60, 0.64, 0.68, 0.72, 0.76, 0.80, 0.84, 0.90]
+holding_days_list = [30, 35, 40, 45, 50]
+stop_levels = [-0.05, -0.10, -0.15, -0.20, -0.25, -0.30, -0.99]
 scenario = 2
 
 # ============================================================
