@@ -15,17 +15,12 @@ stop_levels = [0.00, -0.03, -0.06, -0.09]
 
 results = []
 
-# ==========================================================
-# 🔥 [수정 1] groupby 미리 생성 + list화 (속도 개선)
-# ==========================================================
-grouped = df.groupby("Date", sort=False)  # 🔥 수정
-date_groups = list(grouped)               # 🔥 수정 (dict 대신 list)
+# 🔥 groupby 미리 생성
+grouped = df.groupby("Date", sort=False)
+date_groups = list(grouped)
 
-# ==========================================================
-# 🔥 [수정 2] EV quantile 미리 계산 (루프 밖)
-# ==========================================================
-ev_cut_map = {q: df["EV"].quantile(q) for q in ev_quantiles}  # 🔥 추가
-
+# 🔥 EV quantile 미리 계산
+ev_cut_map = {q: df["EV"].quantile(q) for q in ev_quantiles}
 
 def run_backtest(profit_target, ev_cut, max_days, stop_level, scenario):
 
@@ -42,34 +37,43 @@ def run_backtest(profit_target, ev_cut, max_days, stop_level, scenario):
     max_equity = seed
     max_dd = 0
 
-    # ==========================================================
-    # 🔥 [수정 3] dict 조회 제거 → list unpack 방식
-    # ==========================================================
-    for date, day_data in date_groups:   # 🔥 수정
+    for date, day_data in date_groups:
+
+        # 🔥 [핵심 최적화] 하루 데이터 index를 ticker로 세팅
+        day_data = day_data.set_index("Ticker")   # 🔥 추가
+
         daily_amount = seed / max_days
 
         if not in_position:
+
             candidates = day_data[day_data["EV"] >= ev_cut]
+
             if len(candidates) > 0:
                 pick = candidates.sort_values("EV", ascending=False).iloc[0]
+                ticker = pick.name                     # 🔥 추가
                 price = pick["Close"]
+
                 invest = daily_amount
                 shares = invest / price
 
                 total_shares = shares
                 total_invested = invest
                 seed -= invest
+
                 holding_day = 1
                 extending = False
                 in_position = True
             else:
                 idle_days += 1
+
         else:
-            row = day_data[day_data["Ticker"] == pick["Ticker"]]
-            if row.empty:
+
+            # 🔥 DataFrame 필터 제거 → loc 사용
+            if ticker not in day_data.index:          # 🔥 수정
                 continue
 
-            row = row.iloc[0]
+            row = day_data.loc[ticker]                # 🔥 수정
+
             holding_day += 1
 
             if holding_day > actual_max_holding_days:
@@ -127,6 +131,7 @@ def run_backtest(profit_target, ev_cut, max_days, stop_level, scenario):
                     continue
 
             close_price = row["Close"]
+
             if close_price <= avg_price * 1.05:
                 invest = daily_amount * 0.5 if close_price >= avg_price else daily_amount
                 invest = min(invest, seed)
@@ -137,14 +142,10 @@ def run_backtest(profit_target, ev_cut, max_days, stop_level, scenario):
                     total_invested += invest
                     seed -= invest
 
-        # MDD 계산
-        if in_position:
-            row_current = day_data[day_data["Ticker"] == pick["Ticker"]]
-            current_value = (
-                total_shares * row_current.iloc[0]["Close"]
-                if not row_current.empty
-                else 0
-            )
+        # 🔥 MDD 계산
+        if in_position and ticker in day_data.index:
+            current_price = day_data.loc[ticker]["Close"]
+            current_value = total_shares * current_price
         else:
             current_value = 0
 
@@ -154,6 +155,7 @@ def run_backtest(profit_target, ev_cut, max_days, stop_level, scenario):
             max_equity = equity
 
         dd = (equity - max_equity) / max_equity
+
         if dd < max_dd:
             max_dd = dd
 
@@ -163,14 +165,15 @@ def run_backtest(profit_target, ev_cut, max_days, stop_level, scenario):
     return total_return, equity / INITIAL_SEED, max_dd, idle_days, success_rate, total_trades, actual_max_holding_days
 
 
-# ==========================================================
+# ===============================
 # 파라미터 루프
-# ==========================================================
+# ===============================
 
 scenario = 2
 
 for q in ev_quantiles:
-    ev_cut = ev_cut_map[q]   # 🔥 수정 (미리 계산된 값 사용)
+
+    ev_cut = ev_cut_map[q]
 
     for max_days in holding_days_list:
         for stop_level in stop_levels:
@@ -200,5 +203,5 @@ results_df = pd.DataFrame(results)
 results_df = results_df.sort_values("Seed_Multiple", ascending=False)
 results_df.to_csv(OUTPUT_PATH, index=False)
 
-print("✅ Parametric backtest v3 complete (Optimized loop)")
+print("✅ Parametric backtest v2 complete (Optimized loop)")
 print(results_df.head(10))
