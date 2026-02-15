@@ -8,10 +8,10 @@ INITIAL_SEED = 40_000_000
 df = pd.read_csv(INPUT_PATH, parse_dates=["Date"])
 df = df.sort_values(["Date", "Ticker"])
 
-profit_targets = [0.05, 0.10, 0.15, 0.20]
-ev_quantiles = [0.70, 0.75, 0.80, 0.85, 0.90]
-holding_days_list = [30, 40, 50]
-stop_levels = [-0.05, -0.10, -0.15]
+profit_targets = [0.10, 0.13, 0.15]
+ev_quantiles = [0.70, 0.75, 0.80]
+holding_days_list = [20, 25, 30, 40]
+stop_levels = [0.00, -0.01, -0.02, -0.03, -0.04, -0.05]
 
 results = []
 
