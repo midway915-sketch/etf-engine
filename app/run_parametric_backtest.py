@@ -8,6 +8,7 @@ INITIAL_SEED = 40_000_000
 df = pd.read_csv(INPUT_PATH, parse_dates=["Date"])
 df = df.sort_values(["Date", "Ticker"])
 
+profit_targets = [0.05, 0.10, 0.15, 0.20]
 ev_quantiles = [0.70, 0.75, 0.80, 0.85, 0.90]
 holding_days_list = [30, 40, 50]
 stop_levels = [-0.05, -0.10, -0.15]
@@ -23,7 +24,7 @@ results = []
 # 🔥 Cycle_Count = 총 트레이드 횟수
 # ==========================================================
 
-def run_backtest(ev_cut, max_days, stop_level, scenario):
+def run_backtest(profit_target, ev_cut, max_days, stop_level, scenario):  # 🔥 수정
 
     seed = INITIAL_SEED
     in_position = False
@@ -77,8 +78,8 @@ def run_backtest(ev_cut, max_days, stop_level, scenario):
 
             avg_price = total_invested / total_shares
 
-            if row["High"] >= avg_price * 1.10:
-                sell_price = avg_price * 1.10
+            if row["High"] >= avg_price * (1 + profit_target): 
+                sell_price = avg_price * (1 + profit_target) 
                 proceeds = total_shares * sell_price
                 profit = proceeds - total_invested
 
@@ -173,22 +174,23 @@ def run_backtest(ev_cut, max_days, stop_level, scenario):
 # 파라미터 루프
 # ==========================================================
 
-for scenario in [1, 2]:
-    for q in ev_quantiles:
+scenario = 2
+for q in ev_quantiles:
+    ev_cut = df["EV"].quantile(q)
+    for max_days in holding_days_list:
+        for stop_level in stop_levels:
+            for profit_target in profit_targets:  # 🔥 추가
 
-        ev_cut = df["EV"].quantile(q)
-
-        for max_days in holding_days_list:
-            for stop_level in stop_levels:
 
                 tr, multiple, mdd, idle, sr, cycle_count, real_max_hold = run_backtest(
-                    ev_cut, max_days, stop_level, scenario
+                    ev_cut, max_days, stop_level, scenario, profit_target  # 🔥 수정
                 )
 
                 results.append({
                     "Scenario": scenario,
                     "EV_quantile": q,
                     "EV_cut": ev_cut,
+                    "Profit_Target": profit_target, 
                     "Max_Holding_Days": max_days,
                     "Actual_Max_Holding_Days": real_max_hold,
                     "Stop_Level": stop_level,
