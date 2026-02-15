@@ -181,7 +181,7 @@ for scenario in [1, 2]:
         for max_days in holding_days_list:
             for stop_level in stop_levels:
 
-                tr, multiple, mdd, idle, sr, cycle_count = run_backtest(
+                tr, multiple, mdd, idle, sr, cycle_count, real_max_hold = run_backtest(
                     ev_cut, max_days, stop_level, scenario
                 )
 
@@ -190,13 +190,14 @@ for scenario in [1, 2]:
                     "EV_quantile": q,
                     "EV_cut": ev_cut,
                     "Max_Holding_Days": max_days,
+                    "Actual_Max_Holding_Days": real_max_hold,
                     "Stop_Level": stop_level,
                     "Total_Return": tr,
                     "Seed_Multiple": multiple,
                     "Max_Drawdown": mdd,
                     "Idle_Days": idle,
                     "Success_Rate": sr,
-                    "Cycle_Count": cycle_count  # 🔥 추가
+                    "Cycle_Count": cycle_count
                 })
 
 results_df = pd.DataFrame(results)
