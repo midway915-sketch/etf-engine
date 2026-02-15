@@ -242,6 +242,53 @@ for date, day_data in grouped:
         max_equity[i] = max(max_equity[i], equity)
         dd = (equity - max_equity[i]) / max_equity[i]
         max_dd[i] = min(max_dd[i], dd)
+        
+# ============================================================
+# 🔥 전체 파라미터 결과 생성 및 저장  (🔥 추가)
+# ============================================================
+results = []
+
+for i, (q, ev_cut, profit_target, max_days, stop_level) in enumerate(param_grid):
+
+    # 🔥 마지막 포지션 평가금액 반영
+    if in_position[i]:
+        last_date = df["Date"].max()
+        last_day = df[df["Date"] == last_date].set_index("Ticker")
+        if picked_ticker[i] in last_day.index:
+            current_value = total_shares[i] * last_day.loc[picked_ticker[i]]["Close"]
+        else:
+            current_value = 0
+    else:
+        current_value = 0
+
+    final_equity = seed[i] + current_value
+
+    success_rate = (
+        win_trades[i] / total_trades[i] if total_trades[i] > 0 else 0
+    )
+
+    results.append({
+        "Scenario": scenario,
+        "EV_quantile": q,
+        "EV_cut": ev_cut,
+        "Profit_Target": profit_target,
+        "Max_Holding_Days": max_days,
+        "Actual_Max_Holding_Days": actual_max_holding_days[i],
+        "Stop_Level": stop_level,
+        "Total_Return": (final_equity / INITIAL_SEED) - 1,
+        "Seed_Multiple": final_equity / INITIAL_SEED,
+        "Max_Drawdown": max_dd[i],
+        "Idle_Days": idle_days[i],
+        "Success_Rate": success_rate,
+        "Cycle_Count": total_trades[i],
+    })
+
+results_df = pd.DataFrame(results)
+results_df = results_df.sort_values("Seed_Multiple", ascending=False)
+results_df.to_csv(OUTPUT_PATH, index=False)
+
+print("✅ Numpy Engine Complete (Single Date Loop)")
+print(results_df.head(10))
 
 # ============================================================
 # 🔥 단일 파라미터 완전 일치 검증 (수정 부분)
