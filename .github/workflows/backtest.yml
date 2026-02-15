@@ -26,4 +26,3 @@ jobs:
         with:
           name: parametric-results
           path: data/parametric_results_v2.csv
-                data/cycle_raw_results.csv
