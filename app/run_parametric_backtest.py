@@ -1,18 +1,22 @@
 import pandas as pd
 import numpy as np
+
 INPUT_PATH = "data/backtest_panel.csv"
-OUTPUT_PATH = "data/parametric_results_v2.csv"
+OUTPUT_PATH = "data/cycle_raw_results.csv"   # 🔥 수정: raw 전용 파일로 변경
 INITIAL_SEED = 40_000_000
+
 df = pd.read_csv(INPUT_PATH, parse_dates=["Date"])
 df = df.sort_values(["Date", "Ticker"])
+
 profit_targets = [0.05, 0.10, 0.15]
 ev_quantiles = [0.65, 0.70, 0.75]
 holding_days_list = [20, 30, 40]
 stop_levels = [0.00, -0.05, -0.10]
+
 scenario = 2
 
 # ============================================================
-# 🔥 Numpy Engine (개별 사이클 최대손실률 반영)
+# 🔥 Numpy Engine (사이클 RAW 저장 전용)
 # ============================================================
 
 param_grid = []
@@ -27,21 +31,18 @@ P = len(param_grid)
 
 seed = np.full(P, INITIAL_SEED, dtype=np.float64)
 in_position = np.zeros(P, dtype=bool)
-idle_days = np.zeros(P)
-total_trades = np.zeros(P)
-win_trades = np.zeros(P)
 total_shares = np.zeros(P)
 total_invested = np.zeros(P)
 holding_day = np.zeros(P)
 extending = np.zeros(P, dtype=bool)
-actual_max_holding_days = np.zeros(P)
-max_equity = np.full(P, INITIAL_SEED)
-max_dd = np.zeros(P)
 picked_ticker = np.array([None] * P, dtype=object)
 cycle_unit = np.zeros(P)
 cycle_start_seed = np.zeros(P)
 
-cycle_max_loss = np.zeros(P)   # 🔥 수정: 개별 사이클 최대손실률 저장 (가장 작은 값)
+cycle_max_loss = np.zeros(P)
+
+# 🔥 수정: raw 저장용 리스트
+cycle_raw_records = []
 
 grouped = df.groupby("Date", sort=False)
 
@@ -76,8 +77,6 @@ for date, day_data in grouped:
                 in_position[i] = True
                 picked_ticker[i] = ticker
                 daily_buy_done[i] = True
-            else:
-                idle_days[i] += 1
 
         # =========================
         # 보유 중
@@ -88,10 +87,6 @@ for date, day_data in grouped:
 
             row = day_data.loc[picked_ticker[i]]
             holding_day[i] += 1
-            actual_max_holding_days[i] = max(
-                actual_max_holding_days[i], holding_day[i]
-            )
-
             avg_price = total_invested[i] / total_shares[i]
 
             # ---------- 익절 ----------
@@ -99,12 +94,24 @@ for date, day_data in grouped:
                 sell_price = avg_price * (1 + profit_target)
                 proceeds = total_shares[i] * sell_price
 
-                cycle_return = (proceeds - total_invested[i]) / total_invested[i]  # 🔥 수정
-                cycle_max_loss[i] = min(cycle_max_loss[i], cycle_return)         # 🔥 수정
+                cycle_return = (proceeds - total_invested[i]) / total_invested[i]
+                cycle_max_loss[i] = min(cycle_max_loss[i], cycle_return)
+
+                # 🔥 수정: raw 저장
+                cycle_raw_records.append({
+                    "Scenario": scenario,
+                    "Param_Index": i,
+                    "Ticker": picked_ticker[i],
+                    "Start_Seed": cycle_start_seed[i],
+                    "End_Seed": seed[i] + proceeds,
+                    "Total_Invested": total_invested[i],
+                    "Proceeds": proceeds,
+                    "Cycle_Return": cycle_return,
+                    "Holding_Days": holding_day[i],
+                    "Exit_Type": "PROFIT"
+                })
 
                 seed[i] += proceeds
-                total_trades[i] += 1
-                win_trades[i] += 1
 
                 in_position[i] = False
                 total_shares[i] = 0
@@ -114,6 +121,7 @@ for date, day_data in grouped:
                 cycle_unit[i] = 0
                 cycle_start_seed[i] = 0
                 picked_ticker[i] = None
+
                 continue
 
             # ---------- 연장 시작 ----------
@@ -123,14 +131,28 @@ for date, day_data in grouped:
             # ---------- 연장 손절 ----------
             if extending[i]:
                 if row["Low"] <= avg_price * (1 + stop_level):
+
                     sell_price = avg_price * (1 + stop_level)
                     proceeds = total_shares[i] * sell_price
 
-                    cycle_return = (proceeds - total_invested[i]) / total_invested[i]  # 🔥 수정
-                    cycle_max_loss[i] = min(cycle_max_loss[i], cycle_return)         # 🔥 수정
+                    cycle_return = (proceeds - total_invested[i]) / total_invested[i]
+                    cycle_max_loss[i] = min(cycle_max_loss[i], cycle_return)
+
+                    # 🔥 수정: raw 저장
+                    cycle_raw_records.append({
+                        "Scenario": scenario,
+                        "Param_Index": i,
+                        "Ticker": picked_ticker[i],
+                        "Start_Seed": cycle_start_seed[i],
+                        "End_Seed": seed[i] + proceeds,
+                        "Total_Invested": total_invested[i],
+                        "Proceeds": proceeds,
+                        "Cycle_Return": cycle_return,
+                        "Holding_Days": holding_day[i],
+                        "Exit_Type": "STOP"
+                    })
 
                     seed[i] += proceeds
-                    total_trades[i] += 1
 
                     in_position[i] = False
                     total_shares[i] = 0
@@ -140,6 +162,7 @@ for date, day_data in grouped:
                     cycle_unit[i] = 0
                     cycle_start_seed[i] = 0
                     picked_ticker[i] = None
+
                     continue
 
             # ---------- 추가매수 ----------
@@ -152,69 +175,13 @@ for date, day_data in grouped:
                 seed[i] -= invest
                 daily_buy_done[i] = True
 
-        # =========================
-        # MDD 계산 (기존 유지)
-        # =========================
-        if in_position[i] and picked_ticker[i] in day_data.index:
-            current_price = day_data.loc[picked_ticker[i]]["Close"]
-            current_value = total_shares[i] * current_price
-        else:
-            current_value = 0
-
-        equity = seed[i] + current_value
-
-        if equity > max_equity[i]:
-            max_equity[i] = equity
-
-        dd = (equity - max_equity[i]) / max_equity[i]
-        if dd < max_dd[i]:
-            max_dd[i] = dd
-
 
 # ============================================================
-# 결과 생성
+# 🔥 수정: RAW CSV 저장
 # ============================================================
 
-results = []
+cycle_raw_df = pd.DataFrame(cycle_raw_records)
+cycle_raw_df.to_csv(OUTPUT_PATH, index=False)
 
-for i, (q, ev_cut, profit_target, max_days, stop_level) in enumerate(param_grid):
-
-    if in_position[i]:
-        last_date = df["Date"].max()
-        last_day = df[df["Date"] == last_date].set_index("Ticker")
-        if picked_ticker[i] in last_day.index:
-            current_value = total_shares[i] * last_day.loc[picked_ticker[i]]["Close"]
-        else:
-            current_value = 0
-    else:
-        current_value = 0
-
-    final_equity = seed[i] + current_value
-
-    success_rate = (
-        win_trades[i] / total_trades[i] if total_trades[i] > 0 else 0
-    )
-
-    results.append({
-        "Scenario": scenario,
-        "EV_quantile": q,
-        "EV_cut": ev_cut,
-        "Profit_Target": profit_target,
-        "Max_Holding_Days": max_days,
-        "Actual_Max_Holding_Days": actual_max_holding_days[i],
-        "Stop_Level": stop_level,
-        "Total_Return": (final_equity / INITIAL_SEED) - 1,
-        "Seed_Multiple": final_equity / INITIAL_SEED,
-        "Max_Drawdown": max_dd[i],
-        "Max_Loss_Rate": cycle_max_loss[i],   # 🔥 수정: 개별 사이클 최대손실률 반영
-        "Idle_Days": idle_days[i],
-        "Success_Rate": success_rate,
-        "Cycle_Count": total_trades[i],
-    })
-
-results_df = pd.DataFrame(results)
-results_df = results_df.sort_values("Seed_Multiple", ascending=False)
-results_df.to_csv(OUTPUT_PATH, index=False)
-
-print("✅ Numpy Engine Complete (Cycle Max Loss Applied)")
-print(results_df.head(10))
+print("✅ Cycle RAW data saved")
+print(cycle_raw_df.head())
