@@ -144,7 +144,7 @@ for date, day_data in grouped:
             if extending[i]:
 
                 # 🔥 stop_level 도달 시 청산
-                if row["Low"] <= avg_price * (1 + stop_level):
+                if row["High"] >= avg_price * (1 + stop_level):
 
                     sell_price = avg_price * (1 + stop_level)
                     proceeds = total_shares[i] * sell_price
