@@ -15,9 +15,122 @@ stop_levels = [0.00, -0.10]
 
 scenario = 2
 
-# -------------------------------
-# 🔥 파라미터 조합 생성
-# -------------------------------
+# ============================================================
+# 🔥 원본 엔진 (비교용 - 전략 로직 그대로)
+# ============================================================
+
+grouped_original = list(df.groupby("Date", sort=False))
+
+def run_backtest(profit_target, ev_cut, max_days, stop_level, scenario):
+    seed = INITIAL_SEED
+    in_position = False
+    idle_days = 0
+    total_trades = 0
+    win_trades = 0
+    total_shares = 0
+    total_invested = 0
+    holding_day = 0
+    extending = False
+    actual_max_holding_days = 0
+    max_equity = seed
+    max_dd = 0
+
+    for date, day_data in grouped_original:
+        day_data = day_data.set_index("Ticker")
+        daily_amount = seed / max_days
+
+        if not in_position:
+            candidates = day_data[day_data["EV"] >= ev_cut]
+            if len(candidates) > 0:
+                pick = candidates.sort_values("EV", ascending=False).iloc[0]
+                ticker = pick.name
+                price = pick["Close"]
+                invest = daily_amount
+                shares = invest / price
+                total_shares = shares
+                total_invested = invest
+                seed -= invest
+                holding_day = 1
+                extending = False
+                in_position = True
+            else:
+                idle_days += 1
+        else:
+            if ticker not in day_data.index:
+                continue
+            row = day_data.loc[ticker]
+            holding_day += 1
+            actual_max_holding_days = max(actual_max_holding_days, holding_day)
+            avg_price = total_invested / total_shares
+
+            if row["High"] >= avg_price * (1 + profit_target):
+                sell_price = avg_price * (1 + profit_target)
+                proceeds = total_shares * sell_price
+                profit = proceeds - total_invested
+                seed += proceeds
+                total_trades += 1
+                if profit > 0:
+                    win_trades += 1
+                in_position = False
+                total_shares = 0
+                total_invested = 0
+                continue
+
+            if holding_day >= max_days and not extending:
+                extending = True
+
+            if extending:
+                if row["Low"] <= avg_price * (1 + stop_level):
+                    sell_price = avg_price * (1 + stop_level)
+                    proceeds = total_shares * sell_price
+                    profit = proceeds - total_invested
+                    seed += proceeds
+                    total_trades += 1
+                    if profit > 0:
+                        win_trades += 1
+                    in_position = False
+                    total_shares = 0
+                    total_invested = 0
+                    continue
+
+            close_price = row["Close"]
+            if close_price <= avg_price * 1.05:
+                invest = daily_amount * 0.5 if close_price >= avg_price else daily_amount
+                invest = min(invest, seed)
+                if invest > 0:
+                    shares = invest / close_price
+                    total_shares += shares
+                    total_invested += invest
+                    seed -= invest
+
+        if in_position and ticker in day_data.index:
+            current_price = day_data.loc[ticker]["Close"]
+            current_value = total_shares * current_price
+        else:
+            current_value = 0
+
+        equity = seed + current_value
+        max_equity = max(max_equity, equity)
+        dd = (equity - max_equity) / max_equity
+        max_dd = min(max_dd, dd)
+
+    total_return = (equity / INITIAL_SEED) - 1
+    success_rate = win_trades / total_trades if total_trades > 0 else 0
+
+    return (
+        total_return,
+        equity / INITIAL_SEED,
+        max_dd,
+        idle_days,
+        success_rate,
+        total_trades,
+        actual_max_holding_days,
+    )
+
+# ============================================================
+# 🔥 Numpy Engine (Single Date Loop)
+# ============================================================
+
 param_grid = []
 for q in ev_quantiles:
     ev_cut = df["EV"].quantile(q)
@@ -28,9 +141,6 @@ for q in ev_quantiles:
 
 P = len(param_grid)
 
-# -------------------------------
-# 🔥 상태 배열 초기화
-# -------------------------------
 seed = np.full(P, INITIAL_SEED, dtype=np.float64)
 in_position = np.zeros(P, dtype=bool)
 idle_days = np.zeros(P)
@@ -43,61 +153,39 @@ extending = np.zeros(P, dtype=bool)
 actual_max_holding_days = np.zeros(P)
 max_equity = np.full(P, INITIAL_SEED)
 max_dd = np.zeros(P)
-
-picked_ticker = np.array([None] * P, dtype=object)  # 🔥 수정 (파라미터별 ticker 상태 분리)
+picked_ticker = np.array([None] * P, dtype=object)
 
 grouped = df.groupby("Date", sort=False)
 
-# -------------------------------
-# 🔥 날짜 루프 단 1번
-# -------------------------------
 for date, day_data in grouped:
-
     day_data = day_data.set_index("Ticker")
 
     for i, (q, ev_cut, profit_target, max_days, stop_level) in enumerate(param_grid):
 
         daily_amount = seed[i] / max_days
 
-        # -------------------------------
-        # 진입 전
-        # -------------------------------
         if not in_position[i]:
-
             candidates = day_data[day_data["EV"] >= ev_cut]
-
             if len(candidates) > 0:
                 pick = candidates.sort_values("EV", ascending=False).iloc[0]
-
                 ticker = pick.name
                 price = pick["Close"]
-
                 invest = daily_amount
                 shares = invest / price
-
                 total_shares[i] = shares
                 total_invested[i] = invest
                 seed[i] -= invest
-
                 holding_day[i] = 1
                 extending[i] = False
                 in_position[i] = True
-
-                picked_ticker[i] = ticker  # 🔥 수정
-
+                picked_ticker[i] = ticker
             else:
                 idle_days[i] += 1
-
-        # -------------------------------
-        # 보유 중
-        # -------------------------------
         else:
-
-            if picked_ticker[i] not in day_data.index:  # 🔥 수정
+            if picked_ticker[i] not in day_data.index:
                 continue
 
-            row = day_data.loc[picked_ticker[i]]  # 🔥 수정
-
+            row = day_data.loc[picked_ticker[i]]
             holding_day[i] += 1
             actual_max_holding_days[i] = max(
                 actual_max_holding_days[i], holding_day[i]
@@ -105,115 +193,96 @@ for date, day_data in grouped:
 
             avg_price = total_invested[i] / total_shares[i]
 
-            # 익절
             if row["High"] >= avg_price * (1 + profit_target):
                 sell_price = avg_price * (1 + profit_target)
                 proceeds = total_shares[i] * sell_price
                 profit = proceeds - total_invested[i]
-
                 seed[i] += proceeds
                 total_trades[i] += 1
-
                 if profit > 0:
                     win_trades[i] += 1
-
                 in_position[i] = False
                 total_shares[i] = 0
                 total_invested[i] = 0
-
                 continue
 
-            # 보유일 도달
             if holding_day[i] >= max_days and not extending[i]:
                 extending[i] = True
 
-            # 손절 (연장 상태)
             if extending[i]:
                 if row["Low"] <= avg_price * (1 + stop_level):
-
                     sell_price = avg_price * (1 + stop_level)
                     proceeds = total_shares[i] * sell_price
                     profit = proceeds - total_invested[i]
-
                     seed[i] += proceeds
                     total_trades[i] += 1
-
                     if profit > 0:
                         win_trades[i] += 1
-
                     in_position[i] = False
                     total_shares[i] = 0
                     total_invested[i] = 0
-
                     continue
 
-            # 추가매수
             close_price = row["Close"]
-
             if close_price <= avg_price * 1.05:
-
                 invest = daily_amount * 0.5 if close_price >= avg_price else daily_amount
                 invest = min(invest, seed[i])
-
                 if invest > 0:
                     shares = invest / close_price
                     total_shares[i] += shares
                     total_invested[i] += invest
                     seed[i] -= invest
 
-        # -------------------------------
-        # MDD 계산
-        # -------------------------------
-        if in_position[i] and picked_ticker[i] in day_data.index:  # 🔥 수정
-            current_price = day_data.loc[picked_ticker[i]]["Close"]  # 🔥 수정
+        if in_position[i] and picked_ticker[i] in day_data.index:
+            current_price = day_data.loc[picked_ticker[i]]["Close"]
             current_value = total_shares[i] * current_price
         else:
             current_value = 0
 
         equity = seed[i] + current_value
-
-        if equity > max_equity[i]:
-            max_equity[i] = equity
-
+        max_equity[i] = max(max_equity[i], equity)
         dd = (equity - max_equity[i]) / max_equity[i]
+        max_dd[i] = min(max_dd[i], dd)
 
-        if dd < max_dd[i]:
-            max_dd[i] = dd
+# ============================================================
+# 🔥 원본 vs Numpy 단일 파라미터 검증
+# ============================================================
 
-# -------------------------------
-# 결과 생성
-# -------------------------------
-results = []
+TEST_Q = 0.65
+TEST_PROFIT = 0.15
+TEST_MAX_DAYS = 20
+TEST_STOP = 0.00
+
+ev_cut = df["EV"].quantile(TEST_Q)
+
+orig = run_backtest(
+    TEST_PROFIT,
+    ev_cut,
+    TEST_MAX_DAYS,
+    TEST_STOP,
+    scenario
+)
+
+print("\n===== ORIGINAL ENGINE =====")
+print(orig)
 
 for i, (q, ev_cut, profit_target, max_days, stop_level) in enumerate(param_grid):
+    if (
+        q == TEST_Q
+        and profit_target == TEST_PROFIT
+        and max_days == TEST_MAX_DAYS
+        and stop_level == TEST_STOP
+    ):
+        numpy_result = (
+            (seed[i] / INITIAL_SEED) - 1,
+            seed[i] / INITIAL_SEED,
+            max_dd[i],
+            idle_days[i],
+            win_trades[i] / total_trades[i] if total_trades[i] > 0 else 0,
+            total_trades[i],
+            actual_max_holding_days[i],
+        )
 
-    equity = seed[i]
-
-    total_return = (equity / INITIAL_SEED) - 1
-
-    success_rate = (
-        win_trades[i] / total_trades[i] if total_trades[i] > 0 else 0
-    )
-
-    results.append({
-        "Scenario": scenario,
-        "EV_quantile": q,
-        "EV_cut": ev_cut,
-        "Profit_Target": profit_target,
-        "Max_Holding_Days": max_days,
-        "Actual_Max_Holding_Days": actual_max_holding_days[i],
-        "Stop_Level": stop_level,
-        "Total_Return": total_return,
-        "Seed_Multiple": equity / INITIAL_SEED,
-        "Max_Drawdown": max_dd[i],
-        "Idle_Days": idle_days[i],
-        "Success_Rate": success_rate,
-        "Cycle_Count": total_trades[i]
-    })
-
-results_df = pd.DataFrame(results)
-results_df = results_df.sort_values("Seed_Multiple", ascending=False)
-results_df.to_csv(OUTPUT_PATH, index=False)
-
-print("✅ Numpy Engine Complete (Single Date Loop)")
-print(results_df.head(10))
+        print("\n===== NUMPY ENGINE =====")
+        print(numpy_result)
+        break
