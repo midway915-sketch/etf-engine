@@ -48,7 +48,7 @@ def run_backtest(ev_cut, max_days, stop_level, scenario):
         if not in_position:
             candidates = day_data[day_data["EV"] >= ev_cut]
             if len(candidates) > 0:
-                pick = candidates.sort_values("Max_Drawdown", ascending=False).iloc[0]
+                pick = candidates.sort_values("EV", ascending=False).iloc[0]
                 price = pick["Close"]
                 invest = daily_amount
                 shares = invest / price
