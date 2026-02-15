@@ -16,15 +16,13 @@ stop_levels = [0.00, -0.03, -0.06, -0.09]
 results = []
 
 # ==========================================================
-# 백테스트 함수
-# scenario = 1  → 보유일 도달 시 무조건 정리
-# scenario = 2  → 보유일 이후에도 stop 도달까지 계속 매수
-# 🔥 복리 구조 적용 (daily_amount = seed / max_days)
-# 🔥 MDD = 총자산 기준 (현금 + 평가금)
-# 🔥 Cycle_Count = 총 트레이드 횟수
+# 🔥 [수정 1] groupby 미리 생성 (함수 밖으로 이동)
 # ==========================================================
+date_groups = {date: data for date, data in df.groupby("Date")}  # 🔥 추가
+date_list = list(date_groups.keys())  # 🔥 추가
 
-def run_backtest(profit_target, ev_cut, max_days, stop_level, scenario):  # 🔥 수정
+
+def run_backtest(profit_target, ev_cut, max_days, stop_level, scenario):
 
     seed = INITIAL_SEED
     in_position = False
@@ -35,14 +33,15 @@ def run_backtest(profit_target, ev_cut, max_days, stop_level, scenario):  # 🔥
     total_invested = 0
     holding_day = 0
     extending = False
-    actual_max_holding_days = 0  # 🔥 유지
-
+    actual_max_holding_days = 0
     max_equity = seed
     max_dd = 0
 
-    grouped = df.groupby("Date")
-
-    for date, day_data in grouped:
+    # ==========================================================
+    # 🔥 [수정 2] grouped 제거 → date_list 반복
+    # ==========================================================
+    for date in date_list:                 # 🔥 수정
+        day_data = date_groups[date]       # 🔥 수정
 
         daily_amount = seed / max_days
 
@@ -53,63 +52,52 @@ def run_backtest(profit_target, ev_cut, max_days, stop_level, scenario):  # 🔥
                 price = pick["Close"]
                 invest = daily_amount
                 shares = invest / price
-
                 total_shares = shares
                 total_invested = invest
                 seed -= invest
-
                 holding_day = 1
                 extending = False
                 in_position = True
             else:
                 idle_days += 1
-
         else:
             row = day_data[day_data["Ticker"] == pick["Ticker"]]
             if row.empty:
                 continue
-
             row = row.iloc[0]
             holding_day += 1
 
-            # 🔥 실제 최대 보유일 갱신 추가
             if holding_day > actual_max_holding_days:
                 actual_max_holding_days = holding_day
 
             avg_price = total_invested / total_shares
 
-            if row["High"] >= avg_price * (1 + profit_target): 
-                sell_price = avg_price * (1 + profit_target) 
+            if row["High"] >= avg_price * (1 + profit_target):
+                sell_price = avg_price * (1 + profit_target)
                 proceeds = total_shares * sell_price
                 profit = proceeds - total_invested
-
                 seed += proceeds
                 total_trades += 1
                 if profit > 0:
                     win_trades += 1
-
                 in_position = False
                 total_shares = 0
                 total_invested = 0
                 continue
 
             if holding_day >= max_days and not extending:
-
                 if scenario == 1:
                     sell_price = row["Close"]
                     proceeds = total_shares * sell_price
                     profit = proceeds - total_invested
-
                     seed += proceeds
                     total_trades += 1
                     if profit > 0:
                         win_trades += 1
-
                     in_position = False
                     total_shares = 0
                     total_invested = 0
                     continue
-
                 elif scenario == 2:
                     extending = True
 
@@ -118,12 +106,10 @@ def run_backtest(profit_target, ev_cut, max_days, stop_level, scenario):  # 🔥
                     sell_price = avg_price * (1 + stop_level)
                     proceeds = total_shares * sell_price
                     profit = proceeds - total_invested
-
                     seed += proceeds
                     total_trades += 1
                     if profit > 0:
                         win_trades += 1
-
                     in_position = False
                     total_shares = 0
                     total_invested = 0
@@ -135,7 +121,6 @@ def run_backtest(profit_target, ev_cut, max_days, stop_level, scenario):  # 🔥
                     invest = daily_amount * 0.5
                 else:
                     invest = daily_amount
-
                 invest = min(invest, seed)
                 if invest > 0:
                     shares = invest / close_price
@@ -143,7 +128,7 @@ def run_backtest(profit_target, ev_cut, max_days, stop_level, scenario):  # 🔥
                     total_invested += invest
                     seed -= invest
 
-        # 🔥 MDD 계산 (총자산 기준 유지)
+        # MDD 계산
         if in_position:
             row_current = day_data[day_data["Ticker"] == pick["Ticker"]]
             if not row_current.empty:
@@ -166,31 +151,27 @@ def run_backtest(profit_target, ev_cut, max_days, stop_level, scenario):  # 🔥
     total_return = (equity / INITIAL_SEED) - 1
     success_rate = win_trades / total_trades if total_trades > 0 else 0
 
-    # 🔥 return에 Actual_Max_Holding_Days 복구
     return total_return, equity / INITIAL_SEED, max_dd, idle_days, success_rate, total_trades, actual_max_holding_days
 
 
 # ==========================================================
-# 파라미터 루프
+# 파라미터 루프 (변경 없음)
 # ==========================================================
-
 scenario = 2
+
 for q in ev_quantiles:
     ev_cut = df["EV"].quantile(q)
     for max_days in holding_days_list:
         for stop_level in stop_levels:
-            for profit_target in profit_targets:  # 🔥 추가
-
-
+            for profit_target in profit_targets:
                 tr, multiple, mdd, idle, sr, cycle_count, real_max_hold = run_backtest(
                     profit_target, ev_cut, max_days, stop_level, scenario
                 )
-
                 results.append({
                     "Scenario": scenario,
                     "EV_quantile": q,
                     "EV_cut": ev_cut,
-                    "Profit_Target": profit_target, 
+                    "Profit_Target": profit_target,
                     "Max_Holding_Days": max_days,
                     "Actual_Max_Holding_Days": real_max_hold,
                     "Stop_Level": stop_level,
@@ -206,5 +187,5 @@ results_df = pd.DataFrame(results)
 results_df = results_df.sort_values("Seed_Multiple", ascending=False)
 results_df.to_csv(OUTPUT_PATH, index=False)
 
-print("✅ Parametric backtest v3 complete (Real MDD + Cycle Count)")
+print("✅ Parametric backtest v3 complete (Optimized loop)")
 print(results_df.head(10))
